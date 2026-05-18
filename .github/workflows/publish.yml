@@ -42,6 +42,10 @@ jobs:
 
       - name: publish via OIDC
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Idempotent on retries: if 0.1.0 is already on PyPI from an earlier
+          # successful run, the action succeeds rather than erroring.
+          skip-existing: true
 
   ghcr:
     name: build + push image to GHCR
