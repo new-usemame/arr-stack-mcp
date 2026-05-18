@@ -13,6 +13,7 @@ from uuid import UUID
 import structlog
 
 from arr_stack_mcp.errors import ToolError
+from arr_stack_mcp.fuzzy import is_acronym_or_substring_match, looks_like_acronym
 from arr_stack_mcp.generated.jellyfin.api.items import get_items
 from arr_stack_mcp.generated.jellyfin.api.library import refresh_library
 from arr_stack_mcp.generated.jellyfin.api.session import get_sessions
@@ -97,6 +98,9 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
 
         include_kinds = _kinds_or_unset(args.types)
         user_id = _user_uuid_or_unset(default_user_id)
+
+        # Primary path: ask Jellyfin's SearchTerm. Fast, server-side, handles
+        # typical "the office" / "dune" queries.
         result = await get_items.asyncio(
             client=client,
             user_id=user_id,
@@ -106,10 +110,40 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
             recursive=True,
         )
         if result is None or isinstance(result, dict) or not hasattr(result, "items"):
+            primary_items: list[object] = []
+        else:
+            primary_items = list(result.items or [])
+
+        # Acronym fallback: when SearchTerm returns nothing AND the query looks
+        # like an acronym ("TMNT", "LOTR"), pull a wider Recursive list with no
+        # SearchTerm and apply our own acronym-aware relevance filter locally.
+        # Jellyfin's SearchTerm is fuzzy-but-not-acronym-aware. See
+        # notes/RESEARCH-ibis-bot-followups.md for the source of this pattern.
+        if not primary_items and looks_like_acronym(args.query):
+            wide = await get_items.asyncio(
+                client=client,
+                user_id=user_id,
+                include_item_types=include_kinds,
+                limit=500,
+                recursive=True,
+            )
+            wide_items = list(wide.items or []) if (wide is not None and not isinstance(wide, dict) and hasattr(wide, "items")) else []
+            primary_items = [it for it in wide_items if is_acronym_or_substring_match(args.query, _name_of(it))]
+            total = len(primary_items)
+            items = [_basic_item_to_jf_item(it) for it in primary_items[: args.limit]]
+            return SearchResult(
+                query=args.query,
+                count=len(items),
+                total=total,
+                truncated=total > args.limit,
+                items=items,
+            )
+
+        if not primary_items:
             return SearchResult(query=args.query, count=0, total=0, items=[])
-        items_raw = result.items or []
-        total = _int_or_none(getattr(result, "total_record_count", None)) or len(items_raw)
-        items = [_basic_item_to_jf_item(it) for it in items_raw[: args.limit]]
+
+        total = _int_or_none(getattr(result, "total_record_count", None)) or len(primary_items)
+        items = [_basic_item_to_jf_item(it) for it in primary_items[: args.limit]]
         return SearchResult(
             query=args.query,
             count=len(items),
@@ -225,6 +259,12 @@ def _str_to_uuid_or_unset(s: str | None):  # type: ignore[no-untyped-def]
         return UUID(s)
     except ValueError:
         return UNSET
+
+
+def _name_of(it: object) -> str:
+    """Pull the display name off a generated BaseItemDto-shaped object."""
+    n = getattr(it, "name", None)
+    return str(n) if n else ""
 
 
 def _basic_item_to_jf_item(it: object) -> JellyfinItem:
