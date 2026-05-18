@@ -4,6 +4,13 @@ All notable changes to arr-stack-mcp are tracked here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/new-usemame/arr-stack-mcp/compare/v0.1.1...v0.2.0) (2026-05-18)
+
+
+### Features
+
+* **fuzzy:** port acronym-aware match + year-tag extraction from ibis-bot ([bd4fe87](https://github.com/new-usemame/arr-stack-mcp/commit/bd4fe871c91a64b3bbb1f9bf1de351297af3bfde))
+
 ## [0.1.1](https://github.com/new-usemame/arr-stack-mcp/compare/v0.1.0...v0.1.1) (2026-05-18)
 
 
