@@ -1,3 +1,3 @@
 """arr-stack-mcp — unified MCP interface for Sonarr, Radarr, Lidarr, Prowlarr, Jellyfin."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
