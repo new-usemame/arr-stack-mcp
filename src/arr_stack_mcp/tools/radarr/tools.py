@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 import structlog
 
 from arr_stack_mcp.errors import ToolError
-from arr_stack_mcp.fuzzy import normalize, title_contains
+from arr_stack_mcp.fuzzy import (
+    extract_year_tag,
+    is_acronym_or_substring_match,
+    normalize,
+    title_contains,
+)
 from arr_stack_mcp.generated.radarr.api.calendar import get_api_v3_calendar
 from arr_stack_mcp.generated.radarr.api.missing import get_api_v3_wanted_missing
 from arr_stack_mcp.generated.radarr.api.movie import (
@@ -102,13 +107,19 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
         movies = await get_api_v3_movie.asyncio(client=client)
         if movies is None:
             return SearchResult(query=args.query, count=0, total=0, items=[])
-        q_norm = normalize(args.query)
+
+        # Mirror sonarr.series_search: extract embedded year tag, apply
+        # acronym/substring relevance gate alongside the year filter so
+        # "Dune (1984)" doesn't admit unrelated 1984 movies.
+        clean_query, year = extract_year_tag(args.query, hint_year=args.year)
+        q_norm = normalize(clean_query)
         matches: list[MovieResource] = []
         for m in movies:
             title = _str_or_none(m.title) or ""
-            if not title_contains(title, args.query) and q_norm not in normalize(title):
+            relevant = title_contains(title, clean_query) or q_norm in normalize(title) or is_acronym_or_substring_match(clean_query, title)
+            if not relevant:
                 continue
-            if args.year is not None and _int_or_none(m.year) != args.year:
+            if year is not None and _int_or_none(m.year) != year:
                 continue
             matches.append(m)
         total = len(matches)

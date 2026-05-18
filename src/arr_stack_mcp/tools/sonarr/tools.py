@@ -15,7 +15,12 @@ from typing import TYPE_CHECKING
 import structlog
 
 from arr_stack_mcp.errors import Ambiguous, ToolError
-from arr_stack_mcp.fuzzy import normalize, title_contains
+from arr_stack_mcp.fuzzy import (
+    extract_year_tag,
+    is_acronym_or_substring_match,
+    normalize,
+    title_contains,
+)
 from arr_stack_mcp.generated.sonarr.api.calendar import get_api_v3_calendar
 from arr_stack_mcp.generated.sonarr.api.missing import get_api_v3_wanted_missing
 from arr_stack_mcp.generated.sonarr.api.queue import get_api_v3_queue
@@ -123,15 +128,22 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
         if series_list is None:
             return SearchResult(query=args.query, count=0, total=0, items=[])
 
-        # Score series against the query. Use normalized title containment plus
-        # optional year filter.
-        q_norm = normalize(args.query)
+        # Step 1: pull a year tag off the query if one is embedded ("TMNT (87)",
+        # "Dune (2021)"). The structured ``args.year`` wins if both are present.
+        # See notes/RESEARCH-ibis-bot-followups.md for the rationale.
+        clean_query, year = extract_year_tag(args.query, hint_year=args.year)
+        q_norm = normalize(clean_query)
         matches: list[SeriesResource] = []
         for s in series_list:
             title = _str_or_none(s.title) or ""
-            if not title_contains(title, args.query) and q_norm not in normalize(title):
+            # Two-pass relevance: a candidate must pass title-containment OR
+            # acronym/token-overlap relevance (catches "TMNT" → Teenage Mutant
+            # Ninja Turtles). Year alone is too coarse — Sonarr's lookup
+            # ranking can admit wrong-show same-year results.
+            relevant = title_contains(title, clean_query) or q_norm in normalize(title) or is_acronym_or_substring_match(clean_query, title)
+            if not relevant:
                 continue
-            if args.year is not None and _int_or_none(s.year) != args.year:
+            if year is not None and _int_or_none(s.year) != year:
                 continue
             matches.append(s)
 
