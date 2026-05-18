@@ -14,7 +14,9 @@ tests/
 docs/
 *.md
 !README.md
-LICENSE
+# LICENSE must be present at build time — pyproject.toml's
+# `license = { file = "LICENSE" }` makes hatchling read it during the wheel
+# build inside the Dockerfile's builder stage.
 .github/
 docker-compose*.yml
 .editorconfig
