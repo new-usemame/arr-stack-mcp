@@ -4,6 +4,14 @@ All notable changes to arr-stack-mcp are tracked here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1](https://github.com/new-usemame/arr-stack-mcp/compare/v0.1.0...v0.1.1) (2026-05-18)
+
+
+### Bug Fixes
+
+* **gen:** None-tolerant from_dict + list-iter response.json + live homelab transcript ([11d0e15](https://github.com/new-usemame/arr-stack-mcp/commit/11d0e15aeaf3fc03e2e9b781f3840ca2b42807ca))
+* **gen:** patch response.text-&gt;response.json() across 179 endpoints + record MCP-client transcript ([c9efbe4](https://github.com/new-usemame/arr-stack-mcp/commit/c9efbe4bac0a32a591a2603051a24d515ac7c45e))
+
 ## 0.1.0 (2026-05-18)
 
 
