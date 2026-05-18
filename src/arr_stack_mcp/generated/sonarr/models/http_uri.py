@@ -92,7 +92,11 @@ class HttpUri:
         return field_dict
 
     @classmethod
-    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+    def from_dict(cls: type[T], src_dict):
+        # ARRSTACK_HTTPURI_STR_OK — Servarr family serializes some HttpUri
+        # fields as plain strings even though the spec models them as objects.
+        if isinstance(src_dict, str):
+            return cls(full_uri=src_dict)
         d = dict(src_dict)
 
         def _parse_full_uri(data: object) -> Union[None, Unset, str]:

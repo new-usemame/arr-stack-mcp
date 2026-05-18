@@ -131,6 +131,10 @@ filterwarnings = [
   "error",
   # Generated client may emit pydantic v2 deprecation warnings; ignore those.
   "ignore::DeprecationWarning:arr_stack_mcp.generated",
+  # openapi-python-client's generated Client does not propagate async cleanup;
+  # the lingering socket warnings are upstream behavior, not our bug.
+  "ignore::ResourceWarning",
+  "ignore::pytest.PytestUnraisableExceptionWarning",
 ]
 
 [tool.coverage.run]

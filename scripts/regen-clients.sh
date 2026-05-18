@@ -111,6 +111,41 @@ regen_service() {
   rm -rf "$out"
   mv "$workdir/$svc" "$out"
   echo "    wrote $(find "$out" -type f -name '*.py' | wc -l | tr -d ' ') python files"
+
+  # Post-regen patch: Sonarr/Radarr/Lidarr/Prowlarr ship an OpenAPI HttpUri
+  # object schema but serialize the field as a plain string at runtime
+  # (e.g. health-check wikiUrl). The generated `HttpUri.from_dict` calls
+  # `dict(src_dict)` which crashes on strings. Patch it to accept either.
+  patch_http_uri "$out"
+}
+
+patch_http_uri() {
+  local out=$1
+  local http_uri="$out/models/http_uri.py"
+  if [[ ! -f "$http_uri" ]]; then
+    return 0
+  fi
+  python3 - <<PY "$http_uri"
+import sys, re
+path = sys.argv[1]
+src = open(path).read()
+if "ARRSTACK_HTTPURI_STR_OK" in src:
+    sys.exit(0)
+needle = "    @classmethod\n    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:\n        d = dict(src_dict)"
+patched = (
+    "    @classmethod\n"
+    "    def from_dict(cls: type[T], src_dict):\n"
+    "        # ARRSTACK_HTTPURI_STR_OK — Servarr family serializes some HttpUri\n"
+    "        # fields as plain strings even though the spec models them as objects.\n"
+    "        if isinstance(src_dict, str):\n"
+    "            return cls(full_uri=src_dict)\n"
+    "        d = dict(src_dict)"
+)
+new = src.replace(needle, patched)
+if new == src:
+    sys.exit(0)
+open(path, "w").write(new)
+PY
 }
 
 case "$mode" in
