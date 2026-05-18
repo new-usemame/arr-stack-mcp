@@ -52,7 +52,10 @@ class LogFile:
         return field_dict
 
     @classmethod
-    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+    def from_dict(cls, src_dict):
+        # ARRSTACK_FROM_DICT_NONE_OK
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         _date_created = d.pop("DateCreated", UNSET)
         date_created: Union[Unset, datetime.datetime]

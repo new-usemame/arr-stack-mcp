@@ -45,7 +45,7 @@ declare -A SERVARR_PROJECT=(
   [prowlarr]=Prowlarr
 )
 
-JELLYFIN_LIVE_URL="${JELLYFIN_LIVE_URL:-http://10.0.20.150:8096/api-docs/openapi.json}"
+JELLYFIN_LIVE_URL="${JELLYFIN_LIVE_URL:-http://localhost:8096/api-docs/openapi.json}"
 
 mode="regen"
 services=()
@@ -123,28 +123,49 @@ regen_service() {
   # the OpenAPI spec lists multiple content types for a response (the Servarr
   # specs include `application/json`, `text/json`, and `application/*+json`
   # — the generator picks `text/json` and treats it as plain text). Affects
-  # ~179 endpoints across Sonarr/Radarr/Lidarr/Prowlarr. Substitution is
-  # safe across all generated api/* modules because every endpoint already
-  # confirmed `response.status_code` is the JSON status before parsing.
+  # ~179 endpoints across Sonarr/Radarr/Lidarr/Prowlarr.
   patch_response_text_to_json "$out"
+
+  # Post-regen patch: make every model's `from_dict` tolerate None. Upstream
+  # frequently returns `null` for a nullable nested object (Lidarr's
+  # nextAlbum on a newly-added artist is the canonical case). Without this,
+  # nested-model parsers crash with `'NoneType' object is not iterable`.
+  patch_models_none_tolerance "$out"
 }
 
 patch_response_text_to_json() {
   local out=$1
-  local count
-  count=$(grep -rl "from_dict(response\.text)" "$out/api/" 2>/dev/null | wc -l | tr -d ' ')
-  if [[ "$count" == "0" ]]; then
+  # Two flavors of the same generator bug, both triggered by the Servarr
+  # specs listing application/json + text/json + application/*+json for the
+  # same operation:
+  #   1) single-object: `from_dict(response.text)` — string parsed as a dict
+  #   2) list:          `_response_xxx = response.text` followed by
+  #                     `for item in _response_xxx` — iterates over characters
+  #
+  # Both are deterministic; sed substitution is safe because every endpoint
+  # already gates parsing on response.status_code matching the response shape.
+  local files1 files2 c1 c2
+  files1=$(grep -rl "from_dict(response\.text)" "$out/api/" 2>/dev/null || true)
+  files2=$(grep -rl "_response_[0-9]* = response\.text" "$out/api/" 2>/dev/null || true)
+  c1=0; [[ -n "$files1" ]] && c1=$(echo "$files1" | wc -l | tr -d ' ')
+  c2=0; [[ -n "$files2" ]] && c2=$(echo "$files2" | wc -l | tr -d ' ')
+  if [[ "$c1" == "0" && "$c2" == "0" ]]; then
     return 0
   fi
-  # sed -i is portable across BSD (macOS) + GNU when we pass an empty backup arg.
-  grep -rl "from_dict(response\.text)" "$out/api/" 2>/dev/null | while read -r f; do
+  for f in $files1 $files2; do
     if [[ "$(uname)" == "Darwin" ]]; then
-      sed -i '' 's/from_dict(response\.text)/from_dict(response.json())/g' "$f"
+      sed -i '' \
+        -e 's/from_dict(response\.text)/from_dict(response.json())/g' \
+        -e 's/\(_response_[0-9]*\) = response\.text/\1 = response.json()/g' \
+        "$f"
     else
-      sed -i 's/from_dict(response\.text)/from_dict(response.json())/g' "$f"
+      sed -i \
+        -e 's/from_dict(response\.text)/from_dict(response.json())/g' \
+        -e 's/\(_response_[0-9]*\) = response\.text/\1 = response.json()/g' \
+        "$f"
     fi
   done
-  echo "    patched $count endpoint(s): response.text -> response.json()"
+  echo "    patched response.text -> response.json() in single-object ($c1) and list ($c2) endpoints"
 }
 
 patch_http_uri() {
@@ -174,6 +195,50 @@ if new == src:
     sys.exit(0)
 open(path, "w").write(new)
 PY
+}
+
+patch_models_none_tolerance() {
+  # Make every generated model's `from_dict` accept None gracefully.
+  #
+  # Pattern bug in openapi-python-client 0.24.3: parent models that hold
+  # nullable nested objects emit `if isinstance(_x, Unset): x = UNSET else:
+  # x = Inner.from_dict(_x)`. When upstream returns `x: null`, _x is None,
+  # falls through to the else branch, and `Inner.from_dict(None)` crashes
+  # in `dict(None)`. Lidarr's ArtistResource hit this on `nextAlbum: null`
+  # for newly-added artists.
+  #
+  # Cheapest universal fix: insert a `None -> cls()` guard immediately
+  # before the first `d = dict(src_dict)` in each generated model. Inserting
+  # at that location (rather than transforming the function signature)
+  # handles models that have lazy `from ..models.* import` lines between
+  # the function signature and `d = dict(...)`.
+  local out=$1
+  local count=0
+  while IFS= read -r f; do
+    grep -q "ARRSTACK_FROM_DICT_NONE_OK" "$f" 2>/dev/null && continue
+    python3 - <<'PY' "$f"
+import sys
+path = sys.argv[1]
+src = open(path).read()
+if "ARRSTACK_FROM_DICT_NONE_OK" in src:
+    sys.exit(0)
+needle = "        d = dict(src_dict)"
+i = src.find(needle)
+if i < 0:
+    sys.exit(0)
+guard = (
+    "        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a\n"
+    "        # nullable nested object; treat it as 'no fields supplied'.\n"
+    "        if src_dict is None:\n"
+    "            return cls()\n"
+)
+open(path, "w").write(src[:i] + guard + src[i:])
+PY
+    count=$((count+1))
+  done < <(grep -rl "^        d = dict(src_dict)$" "$out/models" 2>/dev/null)
+  if [[ "$count" -gt 0 ]]; then
+    echo "    patched None-tolerance into $count model from_dict()"
+  fi
 }
 
 case "$mode" in

@@ -47,6 +47,10 @@ class QualityModel:
         from ..models.quality import Quality
         from ..models.revision import Revision
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         _quality = d.pop("quality", UNSET)
         quality: Union[Unset, Quality]

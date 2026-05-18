@@ -105,6 +105,10 @@ class ParseResource:
         from ..models.custom_format_resource import CustomFormatResource
         from ..models.parsed_album_info import ParsedAlbumInfo
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         id = d.pop("id", UNSET)
 

@@ -67,6 +67,10 @@ class SeasonResource:
         from ..models.media_cover import MediaCover
         from ..models.season_statistics_resource import SeasonStatisticsResource
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         season_number = d.pop("seasonNumber", UNSET)
 

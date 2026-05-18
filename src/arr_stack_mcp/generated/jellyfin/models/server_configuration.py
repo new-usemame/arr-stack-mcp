@@ -492,6 +492,10 @@ class ServerConfiguration:
         from ..models.repository_info import RepositoryInfo
         from ..models.trickplay_options import TrickplayOptions
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         log_file_retention_days = d.pop("LogFileRetentionDays", UNSET)
 

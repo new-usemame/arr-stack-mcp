@@ -55,6 +55,10 @@ class SyncPlayStateUpdate:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.group_state_update import GroupStateUpdate
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         _group_id = d.pop("GroupId", UNSET)
         group_id: Union[Unset, UUID]

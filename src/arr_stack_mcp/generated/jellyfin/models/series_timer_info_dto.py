@@ -360,6 +360,10 @@ class SeriesTimerInfoDto:
             SeriesTimerInfoDtoImageTagsType0,
         )
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_id(data: object) -> Union[None, Unset, str]:

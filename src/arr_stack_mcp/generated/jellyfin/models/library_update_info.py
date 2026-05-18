@@ -77,7 +77,10 @@ class LibraryUpdateInfo:
         return field_dict
 
     @classmethod
-    def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
+    def from_dict(cls, src_dict):
+        # ARRSTACK_FROM_DICT_NONE_OK
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         folders_added_to = cast(list[str], d.pop("FoldersAddedTo", UNSET))
 

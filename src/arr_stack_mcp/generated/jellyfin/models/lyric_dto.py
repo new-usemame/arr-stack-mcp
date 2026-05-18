@@ -51,6 +51,10 @@ class LyricDto:
         from ..models.lyric_line import LyricLine
         from ..models.lyric_metadata import LyricMetadata
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         _metadata = d.pop("Metadata", UNSET)
         metadata: Union[Unset, LyricMetadata]

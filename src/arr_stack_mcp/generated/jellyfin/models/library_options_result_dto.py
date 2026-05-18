@@ -101,6 +101,10 @@ class LibraryOptionsResultDto:
         from ..models.library_option_info_dto import LibraryOptionInfoDto
         from ..models.library_type_options_dto import LibraryTypeOptionsDto
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         metadata_savers = []
         _metadata_savers = d.pop("MetadataSavers", UNSET)

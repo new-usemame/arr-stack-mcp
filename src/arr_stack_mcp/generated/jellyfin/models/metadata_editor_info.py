@@ -104,6 +104,10 @@ class MetadataEditorInfo:
         from ..models.name_value_pair import NameValuePair
         from ..models.parental_rating import ParentalRating
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         parental_rating_options = []
         _parental_rating_options = d.pop("ParentalRatingOptions", UNSET)

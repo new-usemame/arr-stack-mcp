@@ -128,6 +128,10 @@ class SyncPlayGroupUpdateMessage:
         from ..models.sync_play_user_joined_update import SyncPlayUserJoinedUpdate
         from ..models.sync_play_user_left_update import SyncPlayUserLeftUpdate
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_data(

@@ -77,6 +77,10 @@ class ChannelMappingOptionsDto:
         from ..models.name_value_pair import NameValuePair
         from ..models.tuner_channel_mapping import TunerChannelMapping
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         tuner_channels = []
         _tuner_channels = d.pop("TunerChannels", UNSET)

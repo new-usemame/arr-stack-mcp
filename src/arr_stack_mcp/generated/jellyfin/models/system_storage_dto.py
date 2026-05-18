@@ -99,6 +99,10 @@ class SystemStorageDto:
         from ..models.folder_storage_dto import FolderStorageDto
         from ..models.library_storage_dto import LibraryStorageDto
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         _program_data_folder = d.pop("ProgramDataFolder", UNSET)
         program_data_folder: Union[Unset, FolderStorageDto]

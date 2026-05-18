@@ -1,0 +1,212 @@
+[
+  {
+    "step": "initialize",
+    "serverInfo": {
+      "name": "arr-stack-mcp",
+      "version": "1.27.1"
+    },
+    "protocolVersion": "2025-11-25"
+  },
+  {
+    "step": "tools/list",
+    "tool_count": 28,
+    "names": [
+      "sonarr.system_status",
+      "sonarr.series_search",
+      "sonarr.series_lookup",
+      "sonarr.queue",
+      "sonarr.calendar",
+      "sonarr.missing",
+      "sonarr.series_add",
+      "sonarr.series_delete",
+      "radarr.system_status",
+      "radarr.movie_search",
+      "radarr.movie_lookup",
+      "radarr.queue",
+      "radarr.calendar",
+      "radarr.missing",
+      "radarr.movie_add",
+      "radarr.movie_delete",
+      "lidarr.system_status",
+      "lidarr.artist_search",
+      "lidarr.artist_lookup",
+      "lidarr.artist_albums",
+      "lidarr.queue",
+      "lidarr.artist_add",
+      "lidarr.artist_delete",
+      "jellyfin.system_info",
+      "jellyfin.library_search",
+      "jellyfin.recent_additions",
+      "jellyfin.now_playing",
+      "jellyfin.scan_library"
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"sonarr\",\n  \"url\": \"https://teenyverse.lan:8989\",\n  \"status\": {\n    \"version\": \"4.0.16.2944\",\n    \"branch\": \"main\",\n    \"runtime_version\": \"6.0.13\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-18T03:13:39+00:00\",\n    \"instance_name\": \"Sonarr\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "radarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"radarr\",\n  \"url\": \"https://teenyverse.lan:7878\",\n  \"status\": {\n    \"version\": \"6.0.4.10291\",\n    \"branch\": \"master\",\n    \"runtime_version\": \"8.0.12\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-18T03:13:39+00:00\",\n    \"instance_name\": \"Radarr\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "lidarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"lidarr\",\n  \"url\": \"https://teenyverse.lan:8686\",\n  \"status\": {\n    \"version\": \"3.1.0.4875\",\n    \"branch\": \"master\",\n    \"runtime_version\": \"8.0.12\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-18T03:13:39+00:00\",\n    \"instance_name\": \"Lidarr\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "jellyfin.system_info",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"jellyfin\",\n  \"url\": \"http://transcoder.lan:8096\",\n  \"info\": {\n    \"version\": \"10.11.8\",\n    \"server_name\": \"d48b0200a339\",\n    \"operating_system\": \"\",\n    \"id\": \"32024a8cec4340168ae070cb98254fc7\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.series_search",
+    "args": {
+      "args": {
+        "query": "the",
+        "limit": 5
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"query\": \"the\",\n  \"count\": 5,\n  \"total\": 9,\n  \"truncated\": true,\n  \"items\": [\n    {\n      \"sonarr_id\": 12,\n      \"tvdb_id\": 73566,\n      \"imdb_id\": \"tt0069637\",\n      \"title\": \"Star Trek: The Animated Series\",\n      \"year\": 1973,\n      \"status\": \"ended\",\n      \"monitored\": true,\n      \"episode_count\": 22,\n      \"episode_file_count\": 4,\n      \"size_on_disk\": 1801861790,\n      \"path\": \"/tv/Star Trek - The Animated Series\"\n    },\n    {\n      \"sonarr_id\": 13,\n      \"tvdb_id\": 71470,\n      \"imdb_id\": \"tt0092455\",\n      \"title\": \"Star Trek: The Next Generation\",\n      \"year\": 1987,\n      \"status\": \"ended\",\n      \"monitored\": true,\n      \"episode_count\": 178,\n      \"episode_file_count\": 158,\n      \"size_on_disk\": 287832914714,\n      \"path\": \"/tv/Star Trek - The Next Generation\"\n    },\n    {\n      \"sonarr_id\": 29,\n      \"tvdb_id\": 78064,\n      \"imdb_id\": \"tt0127388\",\n      \"title\": \"Ninja Turtles: The Next Mutation\",\n      \"year\": 1997,\n      \"status\": \"ended\",\n      \"monitored\": true,\n      \"episode_count\": 26,\n      \"episode_file_count\": 0,\n      \"size_on_disk\": 0,\n      \"path\": \"/tv/Ninja Turtles - The Next Mutation\"\n    },\n    {\n      \"sonarr_id\": 32,\n      \"tvdb_id\": 342246,\n      \"imdb_id\": \"tt6601082\",\n      \"title\": \"Rise of the Teenage Mutant Ninja Turtles\",\n      \"year\": 2018,\n      \"status\": \"ended\",\n      \"monitored\": true,\n      \"episode_count\": 70,\n      \"episode_file_count\": 70,\n      \"size_on_disk\": 24294700287,\n      \"path\": \"/tv/Rise of the Teenage Mutant Ninja Turtles\"\n    },\n    {\n      \"sonarr_id\": 33,\n      \"tvdb_id\": 438875,\n      \"imdb_id\": \"tt28521741\",\n      \"title\": \"Tales of the Teenage Mutant Ninja Turtles\",\n      \"year\": 2024,\n      \"status\": \"ended\",\n      \"monitored\": true,\n      \"episode_count\": 24,\n      \"episode_file_count\": 24,\n      \"size_on_disk\": 25731585299,\n      \"path\": \"/tv/Tales of the Teenage Mutant Ninja Turtles\"\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "radarr.movie_search",
+    "args": {
+      "args": {
+        "query": "dune",
+        "limit": 5
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"query\": \"dune\",\n  \"count\": 0,\n  \"total\": 0,\n  \"truncated\": false,\n  \"items\": []\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "lidarr.artist_search",
+    "args": {
+      "args": {
+        "query": "the",
+        "limit": 5
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"query\": \"the\",\n  \"count\": 5,\n  \"total\": 8,\n  \"truncated\": true,\n  \"items\": [\n    {\n      \"lidarr_id\": 12,\n      \"foreign_artist_id\": \"7441014f-f8f5-494f-81db-ff166fbc078d\",\n      \"name\": \"PinkPantheress\",\n      \"overview\": \"Victoria Beverley Walker, known professionally as PinkPantheress, is a British singer-songwriter and record producer. She is known for her diaristic lyrics and eclectic mix of genres including alternative pop, drum and bass and UK garage, often sampling music from the 1990s and 2000s. She was named Producer of the Year by Billboard Women in Music in 2024, and received accolades such as nominations for three Brit Awards and two Grammy Awards.\",\n      \"status\": \"continuing\",\n      \"monitored\": true,\n      \"album_count\": 24,\n      \"track_count\": 55,\n      \"track_file_count\": 55,\n      \"size_on_disk\": 1045904531,\n      \"path\": \"/music/PinkPantheress\"\n    },\n    {\n      \"lidarr_id\": 14,\n      \"foreign_artist_id\": \"f6beac20-5dfe-4d1f-ae02-0b0a740aafd6\",\n      \"name\": \"Tyler, The Creator\",\n      \"overview\": null,\n      \"status\": \"continuing\",\n      \"monitored\": true,\n      \"album_count\": 11,\n      \"track_count\": 162,\n      \"track_file_count\": 162,\n      \"size_on_disk\": 4082553225,\n      \"path\": \"/music/Tyler, The Creator\"\n    },\n    {\n      \"lidarr_id\": 27,\n      \"foreign_artist_id\": \"36074b04-9901-46e2-b14f-0ead7d35e301\",\n      \"name\": \"Bobby (Boris) Pickett and The Crypt\u2010Kickers\",\n      \"overview\": null,\n      \"status\": \"continuing\",\n      \"monitored\": true,\n      \"album_count\": 1,\n      \"track_count\": 16,\n      \"track_file_count\": 16,\n      \"size_on_disk\": 235320636,\n      \"path\": \"/music/Bobby (Boris) Pickett and The Crypt\u2010Kickers\"\n    },\n    {\n      \"lidarr_id\": 66,\n      \"foreign_artist_id\": \"69681b02-05b8-4685-80cb-e98983b7a96f\",\n      \"name\": \"Mother Mother\",\n      \"overview\": null,\n      \"status\": \"continuing\",\n      \"monitored\": true,\n      \"album_count\": 11,\n      \"track_count\": 143,\n      \"track_file_count\": 128,\n      \"size_on_disk\": 3361650355,\n      \"path\": \"/music/Mother Mother\"\n    },\n    {\n      \"lidarr_id\": 100,\n      \"foreign_artist_id\": \"4d7db1c4-3c00-4140-8c83-c6d99cfdecf4\",\n      \"name\": \"Anna of the North\",\n      \"overview\": null,\n      \"status\": \"continuing\",\n      \"monitored\": true,\n      \"album_count\": 4,\n      \"track_count\": 42,\n      \"track_file_count\": 42,\n      \"size_on_disk\": 1100647143,\n      \"path\": \"/music/Anna of the North\"\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.queue",
+    "args": {
+      "args": {
+        "limit": 10
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 10,\n  \"total\": 255,\n  \"items\": [\n    {\n      \"queue_id\": 91984175,\n      \"series_id\": 43,\n      \"episode_id\": 6668,\n      \"title\": \"Steven.Universe.S05E15.1080p.HMAX.WEB-DL.DD2.0.H.264-LAZY\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 786190827,\n      \"size_left\": 786190827,\n      \"estimated_completion\": \"2026-05-18T23:52:31+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1411148486,\n      \"series_id\": 43,\n      \"episode_id\": 6666,\n      \"title\": \"Steven.Universe.S05E13.1080p.HMAX.WEB-DL.DD2.0.H.264-LAZY\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 710410240,\n      \"size_left\": 710410240,\n      \"estimated_completion\": \"2026-05-18T23:51:56+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 382330649,\n      \"series_id\": 43,\n      \"episode_id\": 6665,\n      \"title\": \"Steven.Universe.S05E12.1080p.HMAX.WEB-DL.DD2.0.H.264-LAZY\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 701098885,\n      \"size_left\": 701098885,\n      \"estimated_completion\": \"2026-05-18T23:51:25+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 403661357,\n      \"series_id\": 43,\n      \"episode_id\": 6664,\n      \"title\": \"Steven.Universe.S05E11.1080p.HMAX.WEB-DL.DD2.0.H.264-LAZY\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 789147811,\n      \"size_left\": 789147811,\n      \"estimated_completion\": \"2026-05-18T23:50:54+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 2050398314,\n      \"series_id\": 43,\n      \"episode_id\": 6662,\n      \"title\": \"Steven.Universe.S05E09.1080p.HMAX.WEB-DL.DD2.0.H.264-LAZY\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 755215892,\n      \"size_left\": 755215892,\n      \"estimated_completion\": \"2026-05-18T23:50:19+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 402100307,\n      \"series_id\": 43,\n      \"episode_id\": 6661,\n      \"title\": \"Steven.Universe.S05E08.1080p.HMAX.WEB-DL.DD2.0.H.264-LAZY\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 748651806,\n      \"size_left\": 748651806,\n      \"estimated_completion\": \"2026-05-18T23:49:46+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 664995656,\n      \"series_id\": 62,\n      \"episode_id\": 7168,\n      \"title\": \"Tales.Of.The.City.S04E10.Three.Of.Cups.1080p.NF.WEB-DL.DDP5.1.X264-NTG\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 1983591219,\n      \"size_left\": 1983591219,\n      \"estimated_completion\": \"2026-05-18T23:49:13+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1653803931,\n      \"series_id\": 62,\n      \"episode_id\": 7167,\n      \"title\": \"Tales.Of.The.City.S04E09.Rainbow.Warriors.1080p.NF.WEB-DL.DDP5.1.X264-NTG\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 2915607511,\n      \"size_left\": 2915607511,\n      \"estimated_completion\": \"2026-05-18T23:47:45+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1353059082,\n      \"series_id\": 62,\n      \"episode_id\": 7166,\n      \"title\": \"Tales.Of.The.City.S04E08.Days.Of.Small.Surrenders.1080p.NF.WEB-DL.DDP5.1.X264-NTG\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 3951548170,\n      \"size_left\": 3951548170,\n      \"estimated_completion\": \"2026-05-18T23:45:36+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 569117776,\n      \"series_id\": 62,\n      \"episode_id\": 7165,\n      \"title\": \"Tales.Of.The.City.S04E07.Next.Level.Shit.1080p.NF.WEB-DL.DDP5.1.X264-NTG\",\n      \"status\": \"downloading\",\n      \"tracked_status\": \"ok\",\n      \"progress_pct\": 0.0,\n      \"size\": 3302815170,\n      \"size_left\": 3302815170,\n      \"estimated_completion\": \"2026-05-18T23:42:41+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "radarr.queue",
+    "args": {
+      "args": {
+        "limit": 10
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 10,\n  \"total\": 11,\n  \"items\": [\n    {\n      \"queue_id\": 52222905,\n      \"movie_id\": 38,\n      \"title\": \"Sleep Dealer 2008 BDRip 1080p DTS multi extra-HighCode\",\n      \"status\": \"warning\",\n      \"progress_pct\": 32.3,\n      \"size\": 8630141252,\n      \"size_left\": 5838471167,\n      \"estimated_completion\": null,\n      \"download_client\": \"qBittorrent\",\n      \"protocol\": \"torrent\"\n    },\n    {\n      \"queue_id\": 1837879102,\n      \"movie_id\": 21,\n      \"title\": \"The.Lord.of.the.Rings.The.War.of.the.Rohirrim.2024.1080p.BluRay.x264-PiGNUS\",\n      \"status\": \"warning\",\n      \"progress_pct\": 0.0,\n      \"size\": 9778069223,\n      \"size_left\": 9778069223,\n      \"estimated_completion\": null,\n      \"download_client\": \"qBittorrent\",\n      \"protocol\": \"torrent\"\n    },\n    {\n      \"queue_id\": 10749361,\n      \"movie_id\": 86,\n      \"title\": \"Weekend.2011.1080p.BluRay.x264.AC3-HDC\",\n      \"status\": \"downloading\",\n      \"progress_pct\": 0.0,\n      \"size\": 9319753973,\n      \"size_left\": 9319753973,\n      \"estimated_completion\": \"2026-05-18T17:44:14+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1680018619,\n      \"movie_id\": 71,\n      \"title\": \"Orlando.1992.PROPER.UHD.BluRay.1080p.DDP.5.1.DoVi.HDR10.x265-SM737\",\n      \"status\": \"downloading\",\n      \"progress_pct\": 0.0,\n      \"size\": 6098696273,\n      \"size_left\": 6098696273,\n      \"estimated_completion\": \"2026-05-18T17:37:19+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1754274755,\n      \"movie_id\": 50,\n      \"title\": \"The.Matrix.Revolutions.2003.PROPER.1080p.UHD.BluRay.DD.7.1.x264-LoRD\",\n      \"status\": \"downloading\",\n      \"progress_pct\": 0.0,\n      \"size\": 20454278430,\n      \"size_left\": 20454278430,\n      \"estimated_completion\": \"2026-05-18T17:32:47+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 975812016,\n      \"movie_id\": 48,\n      \"title\": \"The.Matrix.1999.PROPER.1080p.UHD.BluRay.DD.7.1.x264-LoRD\",\n      \"status\": \"downloading\",\n      \"progress_pct\": 0.0,\n      \"size\": 25915702640,\n      \"size_left\": 25915702640,\n      \"estimated_completion\": \"2026-05-18T17:17:36+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 41702947,\n      \"movie_id\": 51,\n      \"title\": \"The.Matrix.Resurrections.2021.Repack.BluRay.1080p.2Audio.TrueHD.Atmos.7.1.x265.10bit-BeiTai\",\n      \"status\": \"downloading\",\n      \"progress_pct\": 0.0,\n      \"size\": 10696030945,\n      \"size_left\": 10696030945,\n      \"estimated_completion\": \"2026-05-18T16:58:21+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1181803064,\n      \"movie_id\": 51,\n      \"title\": \"The.Matrix.Resurrections.2021.Repack.BluRay.1080p.2Audio.TrueHD.Atmos.7.1.x265.10bit-BeiTai\",\n      \"status\": \"downloading\",\n      \"progress_pct\": 0.0,\n      \"size\": 10696030945,\n      \"size_left\": 10696030945,\n      \"estimated_completion\": \"2026-05-18T16:50:24+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 1098419007,\n      \"movie_id\": 18,\n      \"title\": \"TLOTR1.The.Fellowship.of.the.Ring.2001.PROPER.Extended.1080p.BluRay.DTS-ES.x264-HiDt\",\n      \"status\": \"completed\",\n      \"progress_pct\": 100.0,\n      \"size\": 24397988960,\n      \"size_left\": 0,\n      \"estimated_completion\": \"2026-05-18T16:42:28+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    },\n    {\n      \"queue_id\": 2091231520,\n      \"movie_id\": 8,\n      \"title\": \"Teenage.Mutant.Ninja.Turtles.2014.1080p.BluRay.DD+7.1.x264-playHD\",\n      \"status\": \"failed\",\n      \"progress_pct\": 0.0,\n      \"size\": 0,\n      \"size_left\": 0,\n      \"estimated_completion\": \"2026-05-18T16:42:28+00:00\",\n      \"download_client\": \"SABnzbd\",\n      \"protocol\": \"usenet\"\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.calendar",
+    "args": {
+      "args": {
+        "days_back": 3,
+        "days_forward": 7
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 2,\n  \"items\": [\n    {\n      \"series_id\": 65,\n      \"series_title\": \"Tintoria\",\n      \"season_number\": 2026,\n      \"episode_number\": 18,\n      \"title\": \"TBA\",\n      \"air_date_utc\": \"2026-05-19T16:30:00+00:00\",\n      \"has_file\": false,\n      \"monitored\": true\n    },\n    {\n      \"series_id\": 27,\n      \"series_title\": \"Rick and Morty\",\n      \"season_number\": 9,\n      \"episode_number\": 1,\n      \"title\": \"There's Something About Morty\",\n      \"air_date_utc\": \"2026-05-25T03:00:00+00:00\",\n      \"has_file\": false,\n      \"monitored\": true\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  }
+]

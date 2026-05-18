@@ -265,6 +265,10 @@ class ParsedEpisodeInfo:
         from ..models.quality_model import QualityModel
         from ..models.series_title_info import SeriesTitleInfo
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_release_title(data: object) -> Union[None, Unset, str]:

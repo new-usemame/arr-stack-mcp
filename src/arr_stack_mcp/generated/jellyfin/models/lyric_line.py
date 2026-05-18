@@ -62,6 +62,10 @@ class LyricLine:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         from ..models.lyric_line_cue import LyricLineCue
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         text = d.pop("Text", UNSET)
 

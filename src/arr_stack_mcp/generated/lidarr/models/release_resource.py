@@ -383,6 +383,10 @@ class ReleaseResource:
         from ..models.custom_format_resource import CustomFormatResource
         from ..models.quality_model import QualityModel
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
         id = d.pop("id", UNSET)
 

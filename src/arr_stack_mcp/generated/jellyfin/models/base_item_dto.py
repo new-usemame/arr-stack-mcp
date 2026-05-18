@@ -1736,6 +1736,10 @@ class BaseItemDto:
         from ..models.name_guid_pair import NameGuidPair
         from ..models.user_item_data_dto import UserItemDataDto
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_name(data: object) -> Union[None, Unset, str]:

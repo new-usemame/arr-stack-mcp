@@ -244,6 +244,10 @@ class ParsedTrackInfo:
         from ..models.media_info_model import MediaInfoModel
         from ..models.quality_model import QualityModel
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_title(data: object) -> Union[None, Unset, str]:

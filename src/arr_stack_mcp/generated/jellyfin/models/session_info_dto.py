@@ -364,6 +364,10 @@ class SessionInfoDto:
         from ..models.session_user_info import SessionUserInfo
         from ..models.transcoding_info import TranscodingInfo
 
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_play_state(data: object) -> Union["PlayerStateInfo", None, Unset]:

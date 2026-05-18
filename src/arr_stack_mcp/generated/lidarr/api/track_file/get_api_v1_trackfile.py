@@ -50,7 +50,7 @@ def _parse_response(
 ) -> Optional[list["TrackFileResource"]]:
     if response.status_code == 200:
         response_200 = []
-        _response_200 = response.text
+        _response_200 = response.json()
         for response_200_item_data in _response_200:
             response_200_item = TrackFileResource.from_dict(response_200_item_data)
 

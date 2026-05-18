@@ -97,6 +97,10 @@ class HttpUri:
         # fields as plain strings even though the spec models them as objects.
         if isinstance(src_dict, str):
             return cls(full_uri=src_dict)
+        # ARRSTACK_FROM_DICT_NONE_OK — upstream may return null for a
+        # nullable nested object; treat it as 'no fields supplied'.
+        if src_dict is None:
+            return cls()
         d = dict(src_dict)
 
         def _parse_full_uri(data: object) -> Union[None, Unset, str]:
