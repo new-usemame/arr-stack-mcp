@@ -1,0 +1,119 @@
+[
+  {
+    "step": "initialize",
+    "serverInfo": {
+      "name": "arr-stack-mcp",
+      "version": "1.27.1"
+    },
+    "protocolVersion": "2025-11-25"
+  },
+  {
+    "step": "tools/list",
+    "tool_count": 23,
+    "names": [
+      "sonarr.system_status",
+      "sonarr.series_search",
+      "sonarr.series_lookup",
+      "sonarr.queue",
+      "sonarr.calendar",
+      "sonarr.missing",
+      "sonarr.series_add",
+      "sonarr.series_delete",
+      "radarr.system_status",
+      "radarr.movie_search",
+      "radarr.movie_lookup",
+      "radarr.queue",
+      "radarr.calendar",
+      "radarr.missing",
+      "radarr.movie_add",
+      "radarr.movie_delete",
+      "lidarr.system_status",
+      "lidarr.artist_search",
+      "lidarr.artist_lookup",
+      "lidarr.artist_albums",
+      "lidarr.queue",
+      "lidarr.artist_add",
+      "lidarr.artist_delete"
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"sonarr\",\n  \"url\": \"http://localhost:18989\",\n  \"status\": {\n    \"version\": \"4.0.16.2944\",\n    \"branch\": \"main\",\n    \"runtime_version\": \"6.0.13\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-18T16:19:00+00:00\",\n    \"instance_name\": \"Sonarr\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "radarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"radarr\",\n  \"url\": \"http://localhost:17878\",\n  \"status\": {\n    \"version\": \"6.0.4.10291\",\n    \"branch\": \"master\",\n    \"runtime_version\": \"8.0.12\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-18T16:19:00+00:00\",\n    \"instance_name\": \"RADARR\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "lidarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"lidarr\",\n  \"url\": \"http://localhost:18686\",\n  \"status\": {\n    \"version\": \"3.1.0.4875\",\n    \"branch\": \"master\",\n    \"runtime_version\": \"8.0.12\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-18T16:19:00+00:00\",\n    \"instance_name\": \"LIDARR\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.series_search",
+    "args": {
+      "args": {
+        "query": "anything",
+        "limit": 5
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"query\": \"anything\",\n  \"count\": 0,\n  \"total\": 0,\n  \"truncated\": false,\n  \"items\": []\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "radarr.movie_lookup",
+    "args": {
+      "args": {
+        "query": "Dune",
+        "limit": 3
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"query\": \"Dune\",\n  \"candidates\": [\n    {\n      \"radarr_id\": 0,\n      \"tmdb_id\": 438631,\n      \"imdb_id\": \"tt1160419\",\n      \"title\": \"Dune\",\n      \"year\": 2021,\n      \"status\": \"released\",\n      \"monitored\": false,\n      \"has_file\": false,\n      \"size_on_disk\": null,\n      \"runtime_minutes\": 155,\n      \"certification\": \"PG-13\",\n      \"path\": null,\n      \"in_cinemas\": \"2021-09-15T00:00:00+00:00\",\n      \"digital_release\": \"2021-10-21T00:00:00+00:00\"\n    },\n    {\n      \"radarr_id\": 0,\n      \"tmdb_id\": 693134,\n      \"imdb_id\": \"tt15239678\",\n      \"title\": \"Dune: Part Two\",\n      \"year\": 2024,\n      \"status\": \"released\",\n      \"monitored\": false,\n      \"has_file\": false,\n      \"size_on_disk\": null,\n      \"runtime_minutes\": 167,\n      \"certification\": \"PG-13\",\n      \"path\": null,\n      \"in_cinemas\": \"2024-02-27T00:00:00+00:00\",\n      \"digital_release\": \"2024-02-06T00:00:00+00:00\"\n    },\n    {\n      \"radarr_id\": 0,\n      \"tmdb_id\": 841,\n      \"imdb_id\": \"tt0087182\",\n      \"title\": \"Dune\",\n      \"year\": 1984,\n      \"status\": \"released\",\n      \"monitored\": false,\n      \"has_file\": false,\n      \"size_on_disk\": null,\n      \"runtime_minutes\": 136,\n      \"certification\": \"PG-13\",\n      \"path\": null,\n      \"in_cinemas\": \"1984-12-14T00:00:00+00:00\",\n      \"digital_release\": \"1998-01-04T00:00:00+00:00\"\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  }
+]

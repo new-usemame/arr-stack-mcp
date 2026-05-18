@@ -117,6 +117,34 @@ regen_service() {
   # (e.g. health-check wikiUrl). The generated `HttpUri.from_dict` calls
   # `dict(src_dict)` which crashes on strings. Patch it to accept either.
   patch_http_uri "$out"
+
+  # Post-regen patch: openapi-python-client 0.24.3 emits
+  # `from_dict(response.text)` instead of `from_dict(response.json())` when
+  # the OpenAPI spec lists multiple content types for a response (the Servarr
+  # specs include `application/json`, `text/json`, and `application/*+json`
+  # — the generator picks `text/json` and treats it as plain text). Affects
+  # ~179 endpoints across Sonarr/Radarr/Lidarr/Prowlarr. Substitution is
+  # safe across all generated api/* modules because every endpoint already
+  # confirmed `response.status_code` is the JSON status before parsing.
+  patch_response_text_to_json "$out"
+}
+
+patch_response_text_to_json() {
+  local out=$1
+  local count
+  count=$(grep -rl "from_dict(response\.text)" "$out/api/" 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "$count" == "0" ]]; then
+    return 0
+  fi
+  # sed -i is portable across BSD (macOS) + GNU when we pass an empty backup arg.
+  grep -rl "from_dict(response\.text)" "$out/api/" 2>/dev/null | while read -r f; do
+    if [[ "$(uname)" == "Darwin" ]]; then
+      sed -i '' 's/from_dict(response\.text)/from_dict(response.json())/g' "$f"
+    else
+      sed -i 's/from_dict(response\.text)/from_dict(response.json())/g' "$f"
+    fi
+  done
+  echo "    patched $count endpoint(s): response.text -> response.json()"
 }
 
 patch_http_uri() {
