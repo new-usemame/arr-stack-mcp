@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.10.8"
+
+jobs:
+  lint-and-types:
+    name: lint + types
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: sync
+        run: uv sync --frozen
+
+      - name: ruff check
+        run: uv run ruff check src/ tests/
+
+      - name: ruff format
+        run: uv run ruff format --check src/ tests/
+
+      - name: mypy strict
+        run: uv run mypy src/ tests/
+
+  unit-tests:
+    name: unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ matrix.python-version }}
+
+      - name: sync
+        run: uv sync --frozen
+
+      - name: pytest unit
+        run: uv run pytest -q -m "not integration and not live"
+
+  integration-tests:
+    name: integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: [lint-and-types, unit-tests]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: sync
+        run: uv sync --frozen
+
+      - name: boot test stack
+        run: scripts/test-stack-up.sh
+
+      - name: pytest integration
+        run: uv run pytest -q -m integration
+
+      - name: collect logs on failure
+        if: failure()
+        run: |
+          for svc in sonarr radarr lidarr prowlarr jellyfin; do
+            echo "=== $svc ==="
+            docker logs --tail 100 "arr-mcp-test-$svc" || true
+          done
+
+      - name: teardown
+        if: always()
+        run: scripts/test-stack-down.sh --clean
+
+  build:
+    name: build artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [lint-and-types, unit-tests]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: build wheel + sdist
+        run: uv build
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 14
