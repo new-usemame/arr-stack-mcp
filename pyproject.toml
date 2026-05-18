@@ -103,6 +103,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["PLR0915", "PLR2004"]
+# Each `tools/*/tools.py` registers ~10 tools as nested closures in one function;
+# the statement count for that file exceeds the default cap, but the alternative
+# (split into N modules) would obscure the per-service registration story.
+"src/arr_stack_mcp/tools/*/tools.py" = ["PLR0915"]
 
 [tool.mypy]
 python_version = "3.12"
