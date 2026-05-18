@@ -1,0 +1,145 @@
+[project]
+name = "arr-stack-mcp"
+version = "0.0.0"
+description = "MCP server giving any MCP-capable agent a clean, intelligent, unified interface to Sonarr, Radarr, Lidarr, Prowlarr, and Jellyfin."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [
+  { name = "new-usemame", email = "248195428+new-usemame@users.noreply.github.com" },
+]
+keywords = ["mcp", "sonarr", "radarr", "lidarr", "prowlarr", "jellyfin", "llm", "claude"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Multimedia",
+  "Topic :: System :: Networking",
+]
+dependencies = [
+  "mcp>=1.27,<2",
+  "httpx>=0.28,<1",
+  "pydantic>=2.10,<3",
+  "pydantic-settings>=2.6,<3",
+  "structlog>=25.5,<26",
+  "typer>=0.25,<1",
+  "anyio>=4.6,<5",
+  "pyyaml>=6.0,<7",
+  "rapidfuzz>=3.10,<4",
+  # python-dateutil is a transitive runtime dep of the generated clients
+  # (openapi-python-client emits `from dateutil.parser import isoparse` in
+  # every model that has a datetime field). Pin it explicitly so we don't
+  # rely on an indirect resolution.
+  "python-dateutil>=2.9,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/new-usemame/arr-stack-mcp"
+Repository = "https://github.com/new-usemame/arr-stack-mcp"
+Issues = "https://github.com/new-usemame/arr-stack-mcp/issues"
+Changelog = "https://github.com/new-usemame/arr-stack-mcp/blob/main/CHANGELOG.md"
+
+[project.scripts]
+arr-stack-mcp = "arr_stack_mcp.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/arr_stack_mcp/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arr_stack_mcp"]
+
+[dependency-groups]
+dev = [
+  "ruff>=0.15.13,<0.16",
+  "mypy>=2.1,<3",
+  "pytest>=9.0,<10",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-httpx>=0.35,<1",
+  "pre-commit>=4.6,<5",
+  "types-pyyaml",
+]
+
+# openapi-python-client lives in its own ephemeral env (run via `uvx
+# openapi-python-client@0.24.3 ...` from scripts/regen-clients.sh) because its
+# transitive pins (typer<0.16, ruff<0.12) collide with our project pins.
+
+[tool.ruff]
+# 140 picked so dense single-line docstrings (used for LLM-facing tool
+# descriptions and short module headers) don't force awkward multi-line wraps.
+# Code lines are kept under 100 by the formatter; the higher cap is exercised
+# only by prose docstrings and the occasional long type-annotation expression.
+line-length = 140
+target-version = "py312"
+src = ["src", "tests"]
+extend-exclude = ["src/arr_stack_mcp/generated"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",       # pycodestyle
+  "F",            # pyflakes
+  "I",            # isort
+  "N",            # pep8-naming
+  "B",            # bugbear
+  "C4",           # comprehensions
+  "UP",           # pyupgrade
+  "PT",           # pytest-style
+  "SIM",          # simplify
+  "PL",           # pylint subset
+  "RUF",
+]
+ignore = [
+  "PLR0913",      # allow many args (MCP tool input schemas are wide by design)
+  "PLR2004",      # allow magic numbers in tests
+  "PLC0415",      # deferred imports inside register() are intentional — each toolset is lazy-loaded so a disabled service pays no startup cost
+  "N818",         # short exception names (ConfirmRequired, Ambiguous, PolicyDenied) are part of the LLM-facing tool contract; "Error" suffix would bloat the wire shape without adding signal
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR0915", "PLR2004"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+pretty = true
+show_error_codes = true
+exclude = "src/arr_stack_mcp/generated/"
+
+[[tool.mypy.overrides]]
+module = "arr_stack_mcp.generated.*"
+ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "integration: requires the docker-compose.test.yml stack to be running",
+  "live: requires the operator's home lab (skipped by default; opt-in via ARR_STACK_MCP_LIVE=1)",
+]
+filterwarnings = [
+  "error",
+  # Generated client may emit pydantic v2 deprecation warnings; ignore those.
+  "ignore::DeprecationWarning:arr_stack_mcp.generated",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["src/arr_stack_mcp"]
+omit = ["src/arr_stack_mcp/generated/*"]
+
+[tool.coverage.report]
+precision = 1
+show_missing = true
+skip_covered = false
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+]

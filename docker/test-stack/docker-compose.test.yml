@@ -1,0 +1,121 @@
+# Integration-test stack for arr-stack-mcp.
+#
+# Brings up Sonarr / Radarr / Lidarr / Prowlarr / Jellyfin on isolated localhost
+# ports. Each service is seeded with a predictable API key via the LinuxServer
+# config volume so the test harness can talk to them without a discovery step.
+#
+# Usage:
+#   scripts/test-stack-up.sh    # builds + boots + waits for health
+#   scripts/test-stack-down.sh  # cleans up volumes
+#
+# Ports are picked to not collide with the operator's live home lab on
+# 10.0.30.36 (8989 / 7878 / 8686 / 9696) — these run on localhost.
+#
+# Image versions are pinned. Bumping requires regenerating the OpenAPI
+# specs in research/openapi/ and regenerating the typed clients.
+
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:4.0.16
+    container_name: arr-mcp-test-sonarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config/sonarr:/config
+      - ./media/tv:/tv
+      - ./downloads:/downloads
+    ports:
+      - "18989:8989"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk http://localhost:8989/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:6.0.4
+    container_name: arr-mcp-test-radarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config/radarr:/config
+      - ./media/movies:/movies
+      - ./downloads:/downloads
+    ports:
+      - "17878:7878"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk http://localhost:7878/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  lidarr:
+    image: lscr.io/linuxserver/lidarr:3.1.0
+    container_name: arr-mcp-test-lidarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config/lidarr:/config
+      - ./media/music:/music
+      - ./downloads:/downloads
+    ports:
+      - "18686:8686"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk http://localhost:8686/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:2.3.5
+    container_name: arr-mcp-test-prowlarr
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+    volumes:
+      - ./config/prowlarr:/config
+    ports:
+      - "19696:9696"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk http://localhost:9696/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 30s
+
+  jellyfin:
+    image: jellyfin/jellyfin:10.11.8
+    container_name: arr-mcp-test-jellyfin
+    environment:
+      - TZ=Etc/UTC
+      - JELLYFIN_PublishedServerUrl=http://localhost:18096
+    volumes:
+      - ./config/jellyfin:/config
+      - ./media:/media:ro
+    ports:
+      - "18096:8096"
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8096/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 60s
+
+networks:
+  default:
+    name: arr-mcp-test

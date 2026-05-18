@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+wheels/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# uv
+.venv/
+.uv-cache/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local config that must never leak (API keys, real-host pointers)
+.env
+.env.local
+.env.*.local
+config.local.yaml
+config.local.yml
+*-local.yaml
+
+# Docker test stack runtime
+docker/test-stack/config/
+docker/test-stack/data/
+
+# Research / scratch (these are gitignored — research/ is for prior-art clones + spec snapshots, kept out of the published repo)
+research/
+
+# Operator-only notes (under notes/, but specific personal ones)
+notes/STOP-*.md
+notes/SCRATCH-*.md
