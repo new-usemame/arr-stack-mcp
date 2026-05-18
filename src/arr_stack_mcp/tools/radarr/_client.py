@@ -1,0 +1,28 @@
+"""Construct the generated Radarr client wired with the operator's URL + API key."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import httpx
+
+from arr_stack_mcp.generated.radarr.client import AuthenticatedClient, Client
+
+if TYPE_CHECKING:
+    from arr_stack_mcp.config import ServiceConfig
+
+
+def make_radarr_client(svc: ServiceConfig) -> Client | AuthenticatedClient:
+    """Build a Radarr generated-client wired with the operator's headers + TLS posture."""
+    base_url = str(svc.url).rstrip("/")
+    headers: dict[str, str] = {}
+    if svc.api_key is not None:
+        headers["X-Api-Key"] = svc.api_key.get_secret_value()
+    return Client(
+        base_url=base_url,
+        headers=headers,
+        timeout=httpx.Timeout(svc.timeout_seconds),
+        verify_ssl=svc.verify_tls,
+        follow_redirects=False,
+        raise_on_unexpected_status=False,
+    )
