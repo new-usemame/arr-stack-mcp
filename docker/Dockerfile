@@ -2,7 +2,7 @@
 # Multi-stage build for arr-stack-mcp. uv-based dependency install in the
 # builder stage; python:3.12-slim runtime keeps the published image small.
 
-FROM ghcr.io/astral-sh/uv:0.10.8-python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.10.8-python3.12-trixie-slim AS builder
 
 ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
