@@ -67,16 +67,51 @@ jobs:
       - name: docker buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: derive image tags
+        id: tags
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          tag="${INPUT_TAG:-$RELEASE_TAG}"
+          if [[ -z "$tag" ]]; then
+            echo "no tag input or release tag available" >&2
+            exit 1
+          fi
+          # Normalize: with-v vs without-v.
+          if [[ "$tag" == v* ]]; then
+            with_v="$tag"
+            no_v="${tag#v}"
+          else
+            with_v="v$tag"
+            no_v="$tag"
+          fi
+          # Skip latest for prereleases.
+          if [[ "$tag" == *rc* || "$tag" == *beta* || "$tag" == *alpha* ]]; then
+            latest_enabled=false
+          else
+            latest_enabled=true
+          fi
+          echo "with_v=$with_v"     >> "$GITHUB_OUTPUT"
+          echo "no_v=$no_v"         >> "$GITHUB_OUTPUT"
+          echo "latest=$latest_enabled" >> "$GITHUB_OUTPUT"
+          echo "Will publish image tags: $with_v, $no_v, latest=$latest_enabled"
+
       - name: image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE }}
+          # `type=ref,event=tag` / `type=semver` only fire on real release
+          # events, not on workflow_dispatch. The `type=raw` lines below cover
+          # both — they read the normalized values from the previous step,
+          # which itself accepts either an explicit `inputs.tag` (dispatch) or
+          # falls back to `github.event.release.tag_name` (release-triggered).
           tags: |
-            type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ !contains(github.ref, 'rc') }}
+            type=raw,value=${{ steps.tags.outputs.with_v }}
+            type=raw,value=${{ steps.tags.outputs.no_v }}
+            type=raw,value=latest,enable=${{ steps.tags.outputs.latest == 'true' }}
 
       - name: build + push
         uses: docker/build-push-action@v6
