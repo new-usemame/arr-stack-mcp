@@ -61,21 +61,67 @@ def build_server(cfg: Config, policy: Policy) -> FastMCP:
 def _server_instructions(cfg: Config) -> str:
     """Instructions string the MCP client passes to the agent at session start.
 
-    Names the active services and the active risk-tolerance flags so the agent
-    knows what's safe to call.
+    Lifts LLM-facing discipline from ibis-bot's SYSTEM_PROMPT (output-discipline,
+    confirm-token UX, disambiguation, error envelopes) minus the Matrix-specific
+    bits. See notes/DESIGN-v0.2.md §1.1 for the porting rationale.
     """
     enabled = ", ".join(s.name for s in _enabled_services(cfg)) or "none"
-    flags = []
+    flags: list[str] = []
     if cfg.policy.read_only:
         flags.append("read-only mode")
     if cfg.policy.disable_destructive:
         flags.append("destructive tools disabled")
     flag_str = f" ({'; '.join(flags)})" if flags else ""
+    # Implicit string concatenation inside the parenthesized return keeps each
+    # source line under the 140-col ruff cap while preserving the on-wire
+    # instructions text (no mid-paragraph line breaks).
     return (
-        f"arr-stack-mcp gives you tools to query and control the user's *arr media stack and Jellyfin. "
-        f"Active services: {enabled}{flag_str}. "
-        f"Every destructive operation requires a confirm token. "
-        f"Prefer `*.search` over `*.lookup_external` when the user asks about existing library content."
+        f"arr-stack-mcp exposes a unified tool surface for Sonarr, Radarr, Lidarr, Prowlarr, and Jellyfin."
+        f" Active services: {enabled}{flag_str}.\n\n"
+        "Result envelopes\n\n"
+        "Every tool returns a self-describing pydantic envelope with `ok`, plus typed `items` / `count` /"
+        " `total` / `candidates` fields as appropriate. Treat that envelope as the answer. Do not paraphrase"
+        " its fields back to the user verbatim; your role is to interpret and act, not to re-render JSON.\n\n"
+        "Confirm tokens for destructive operations\n\n"
+        "Tools tagged DESTRUCTIVE (delete series / movies / artists / library items) follow a two-step"
+        " pattern. The first call without `confirm_token` returns a plan envelope with `needs_confirm: true`,"
+        " `confirm_token`, and a human-readable `summary`. The second call passes that same `confirm_token`"
+        " and executes. Tokens are single-use, payload-bound, and expire after `confirm_token_ttl_seconds`"
+        " (default 300s). The plan is already in the first envelope; you do not need to repeat the token to"
+        " the user.\n\n"
+        "Disambiguation\n\n"
+        "When a lookup matches more than one library row, the server returns an `Ambiguous` error envelope"
+        " with a `candidates` list, each carrying its stable id (`sonarr_id`, `radarr_id`, `lidarr_id`,"
+        " `tvdb_id`, `tmdb_id`, `mbid`, Jellyfin item id). To pick one, retry the same tool with that id"
+        " parameter (for example `sonarr_id=42`). Do not append fields to the original query string;"
+        " appending the author or year to the title rarely matches what's in the library, while the id"
+        " always does.\n\n"
+        "Tool selection\n\n"
+        "- `*.search` queries the existing library (already-added series / movies / artists / items)."
+        " `*.lookup` (Sonarr / Radarr / Lidarr) queries the external catalog (TVDB / TMDB / MusicBrainz) for"
+        " items the user could add. The id returned by `*.lookup` is what `*.add` requires. Idempotent add"
+        " tools detect already-added by id and return `already_added: true`.\n"
+        "- `*.system_status` is the cheapest read. Use it first when diagnosing connectivity or version"
+        " concerns.\n"
+        "- Prefer one bulk or aggregate call over N parallel per-service calls. Fanout fragments errors and"
+        " multiplies token cost.\n\n"
+        "Heuristics built into the server\n\n"
+        "- Year tags embedded in titles (`Dune (2021)`, `BSG (2004)`, `TMNT (87)`) are extracted before the"
+        " upstream lookup and re-applied as a year filter. Pass `year=N` for cleaner intent when the user"
+        " explicitly named one.\n"
+        "- Acronyms (`TMNT`, `LOTR`, `MCU`) resolve via initials when rapidfuzz's token-set ratio misses"
+        " them. Jellyfin search falls back to a wider recursive scan automatically when the query looks like"
+        " an acronym.\n\n"
+        "Errors\n\n"
+        "Each error envelope carries a `code` and a `hint`. `policy_denied` means the operator started the"
+        " server with `--read-only` or `--disable-destructive`; the call shape is valid but the server gated"
+        " it. Explain to the user; do not retry. `upstream_unavailable` means the underlying service did not"
+        " respond; try `*.system_status` to verify reachability. `upstream_auth_failed` means the API key"
+        " rotated or is wrong; the hint identifies the service. `confirm_required` means the two-step"
+        " pattern was not honored; issue the first-call plan, then re-invoke with the token. `ambiguous`"
+        " carries `candidates` per the disambiguation rule above.\n\n"
+        "If a tool errors in a way you cannot explain, call `stack.report_issue` to capture the diagnostic"
+        " context for the user to post upstream.\n"
     )
 
 
