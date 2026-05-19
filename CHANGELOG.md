@@ -4,6 +4,13 @@ All notable changes to arr-stack-mcp are tracked here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/new-usemame/arr-stack-mcp/compare/v0.2.0...v0.2.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* **stdio:** route structlog to stderr so logs don't corrupt JSON-RPC frames ([2bd91a4](https://github.com/new-usemame/arr-stack-mcp/commit/2bd91a4848c58d0a1baf176c1997206f98081642))
+
 ## [0.2.0](https://github.com/new-usemame/arr-stack-mcp/compare/v0.1.2...v0.2.0) (2026-05-19)
 
 
