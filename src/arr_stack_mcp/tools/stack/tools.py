@@ -20,11 +20,19 @@ from arr_stack_mcp.tools.stack._models import (
     DryRunEntry,
     DryRunLogInput,
     DryRunLogResult,
+    FindAnywhereInput,
+    FindAnywhereResult,
+    FindAnywhereSourceResult,
+    QueueStatusAllInput,
+    QueueStatusAllResult,
+    QueueStatusAllSource,
     ReportIssueInput,
     ReportIssueResult,
+    StackFoundItem,
     StackHealthInput,
     StackHealthResult,
     StackHealthService,
+    StackQueueItem,
 )
 
 if TYPE_CHECKING:
@@ -87,6 +95,39 @@ def register_all(mcp: FastMCP, cfg: Config, policy: Policy) -> None:
         params = {"title": args.summary, "body": body}
         url = f"https://github.com/{_REPO_SLUG}/issues/new?" + urllib.parse.urlencode(params)
         return ReportIssueResult(url=url, repo=_REPO_SLUG)
+
+    @mcp.tool(
+        name="stack.find_anywhere",
+        description=(
+            "Fan a free-text query across every enabled arr / Jellyfin library in parallel and "
+            "return a merged result list. Each row carries `source` (which service it came from), "
+            "the stable id within that source, a title, year, and type. Use when the user's intent "
+            "spans services ('where is X?', 'do we have X?'). For service-specific searches, call "
+            "`*.search` on that service directly. Read-only; honors per-service errors gracefully "
+            "(a single service failure does not fail the whole result)."
+        ),
+    )
+    async def stack_find_anywhere(args: FindAnywhereInput) -> FindAnywhereResult:
+        policy.check("stack.find_anywhere", Tag.READ)
+        sources = await _gather_find_anywhere(cfg, args.query, args.limit_per_service)
+        total = sum(s.count for s in sources)
+        return FindAnywhereResult(query=args.query, total_count=total, sources=sources)
+
+    @mcp.tool(
+        name="stack.queue_status_all",
+        description=(
+            "Aggregate the active download / grab queue across Sonarr, Radarr, and Lidarr. Returns "
+            "a list per source with normalized queue rows (`source`, `queue_id`, `entity_id`, "
+            "`title`, `status`, `progress_pct`, `size`, `size_left`). Use to answer 'what's "
+            "downloading right now?'. Jellyfin is omitted (it has no download queue concept). "
+            "Read-only; per-service failures appear as `error` on the source row."
+        ),
+    )
+    async def stack_queue_status_all(args: QueueStatusAllInput) -> QueueStatusAllResult:
+        policy.check("stack.queue_status_all", Tag.READ)
+        sources = await _gather_queue_status_all(cfg, args.limit_per_service)
+        total = sum(s.count for s in sources)
+        return QueueStatusAllResult(total_count=total, sources=sources)
 
     @mcp.tool(
         name="stack.health",
@@ -262,3 +303,310 @@ async def _probe_jellyfin(svc: ServiceConfig) -> tuple[bool, str | None, str | N
     if result is None or isinstance(result, dict):
         return False, None, "empty response"
     return True, str(getattr(result, "version", "") or ""), None
+
+
+# ---------- find_anywhere ----------
+
+
+async def _gather_find_anywhere(cfg: Config, query: str, limit: int) -> list[FindAnywhereSourceResult]:
+    """Fan the query across every enabled arr + Jellyfin in parallel."""
+    coros: dict[str, asyncio.Task[FindAnywhereSourceResult]] = {}
+    for name, svc in cfg.services.items():
+        if not svc.enabled:
+            continue
+        if name in {"sonarr", "radarr", "lidarr", "jellyfin"}:
+            coros[name] = asyncio.create_task(_find_in_service(svc, query, limit))
+    sources: list[FindAnywhereSourceResult] = []
+    for name in sorted(coros.keys()):
+        sources.append(await coros[name])
+    return sources
+
+
+async def _find_in_service(svc: ServiceConfig, query: str, limit: int) -> FindAnywhereSourceResult:
+    """One service's per-library search, projected to StackFoundItem rows."""
+    try:
+        if svc.name == "sonarr":
+            return await _find_sonarr(svc, query, limit)
+        if svc.name == "radarr":
+            return await _find_radarr(svc, query, limit)
+        if svc.name == "lidarr":
+            return await _find_lidarr(svc, query, limit)
+        if svc.name == "jellyfin":
+            return await _find_jellyfin(svc, query, limit)
+    except Exception as exc:
+        return FindAnywhereSourceResult(source=svc.name, count=0, items=[], error=f"{type(exc).__name__}: {exc}")
+    return FindAnywhereSourceResult(source=svc.name, count=0, items=[], error=f"unknown service: {svc.name!r}")
+
+
+async def _find_sonarr(svc: ServiceConfig, query: str, limit: int) -> FindAnywhereSourceResult:
+    from arr_stack_mcp.fuzzy import is_acronym_or_substring_match, normalize, title_contains
+    from arr_stack_mcp.generated.sonarr.api.series import get_api_v3_series
+    from arr_stack_mcp.tools.sonarr._client import make_sonarr_client
+
+    client = make_sonarr_client(svc)
+    series = await get_api_v3_series.asyncio(client=client)
+    if not series:
+        return FindAnywhereSourceResult(source="sonarr", count=0, items=[])
+    q_norm = normalize(query)
+    matches: list[StackFoundItem] = []
+    for s in series:
+        title = str(getattr(s, "title", "") or "")
+        if not (title_contains(title, query) or q_norm in normalize(title) or is_acronym_or_substring_match(query, title)):
+            continue
+        matches.append(
+            StackFoundItem(
+                source="sonarr",
+                id=int(getattr(s, "id", 0) or 0),
+                title=title,
+                year=_safe_int(getattr(s, "year", None)),
+                type="Series",
+                external_id=_safe_str(getattr(s, "tvdb_id", None)),
+            )
+        )
+        if len(matches) >= limit:
+            break
+    return FindAnywhereSourceResult(source="sonarr", count=len(matches), items=matches)
+
+
+async def _find_radarr(svc: ServiceConfig, query: str, limit: int) -> FindAnywhereSourceResult:
+    from arr_stack_mcp.fuzzy import is_acronym_or_substring_match, normalize, title_contains
+    from arr_stack_mcp.generated.radarr.api.movie import get_api_v3_movie
+    from arr_stack_mcp.tools.radarr._client import make_radarr_client
+
+    client = make_radarr_client(svc)
+    movies = await get_api_v3_movie.asyncio(client=client)
+    if not movies:
+        return FindAnywhereSourceResult(source="radarr", count=0, items=[])
+    q_norm = normalize(query)
+    matches: list[StackFoundItem] = []
+    for m in movies:
+        title = str(getattr(m, "title", "") or "")
+        if not (title_contains(title, query) or q_norm in normalize(title) or is_acronym_or_substring_match(query, title)):
+            continue
+        matches.append(
+            StackFoundItem(
+                source="radarr",
+                id=int(getattr(m, "id", 0) or 0),
+                title=title,
+                year=_safe_int(getattr(m, "year", None)),
+                type="Movie",
+                external_id=_safe_str(getattr(m, "tmdb_id", None)),
+            )
+        )
+        if len(matches) >= limit:
+            break
+    return FindAnywhereSourceResult(source="radarr", count=len(matches), items=matches)
+
+
+async def _find_lidarr(svc: ServiceConfig, query: str, limit: int) -> FindAnywhereSourceResult:
+    from arr_stack_mcp.fuzzy import is_acronym_or_substring_match, normalize, title_contains
+    from arr_stack_mcp.generated.lidarr.api.artist import get_api_v1_artist
+    from arr_stack_mcp.tools.lidarr._client import make_lidarr_client
+
+    client = make_lidarr_client(svc)
+    artists = await get_api_v1_artist.asyncio(client=client)
+    if not artists:
+        return FindAnywhereSourceResult(source="lidarr", count=0, items=[])
+    q_norm = normalize(query)
+    matches: list[StackFoundItem] = []
+    for a in artists:
+        name = str(getattr(a, "artist_name", "") or "")
+        if not (title_contains(name, query) or q_norm in normalize(name) or is_acronym_or_substring_match(query, name)):
+            continue
+        matches.append(
+            StackFoundItem(
+                source="lidarr",
+                id=int(getattr(a, "id", 0) or 0),
+                title=name,
+                year=None,  # Lidarr artist has no canonical year
+                type="MusicArtist",
+                external_id=_safe_str(getattr(a, "foreign_artist_id", None)),
+            )
+        )
+        if len(matches) >= limit:
+            break
+    return FindAnywhereSourceResult(source="lidarr", count=len(matches), items=matches)
+
+
+async def _find_jellyfin(svc: ServiceConfig, query: str, limit: int) -> FindAnywhereSourceResult:
+    from uuid import UUID
+
+    from arr_stack_mcp.generated.jellyfin.api.items import get_items
+    from arr_stack_mcp.generated.jellyfin.client import AuthenticatedClient
+    from arr_stack_mcp.generated.jellyfin.types import UNSET, Unset
+    from arr_stack_mcp.tools.jellyfin._client import make_jellyfin_client
+
+    client = make_jellyfin_client(svc)
+    if not isinstance(client, AuthenticatedClient):
+        return FindAnywhereSourceResult(source="jellyfin", count=0, items=[], error="jellyfin requires API key")
+    # default_user_id is optional config; when set we narrow to a UUID,
+    # otherwise the upstream call uses UNSET (no user scoping).
+    user_id: Unset | UUID = UNSET
+    if svc.default_user_id:
+        try:
+            user_id = UUID(svc.default_user_id)
+        except ValueError:
+            user_id = UNSET
+    result = await get_items.asyncio(
+        client=client,
+        user_id=user_id,
+        search_term=query,
+        limit=limit,
+        recursive=True,
+    )
+    if result is None or isinstance(result, dict) or not hasattr(result, "items"):
+        return FindAnywhereSourceResult(source="jellyfin", count=0, items=[])
+    items_raw = list(result.items or [])
+    matches = [
+        StackFoundItem(
+            source="jellyfin",
+            id=str(getattr(it, "id", "") or ""),
+            title=str(getattr(it, "name", "") or "<unknown>"),
+            year=_safe_int(getattr(it, "production_year", None)),
+            type=_safe_str(getattr(it, "type_", None) or getattr(it, "type", None)),
+        )
+        for it in items_raw
+    ]
+    return FindAnywhereSourceResult(source="jellyfin", count=len(matches), items=matches)
+
+
+# ---------- queue_status_all ----------
+
+
+async def _gather_queue_status_all(cfg: Config, limit: int) -> list[QueueStatusAllSource]:
+    coros: dict[str, asyncio.Task[QueueStatusAllSource]] = {}
+    for name, svc in cfg.services.items():
+        if not svc.enabled:
+            continue
+        if name in {"sonarr", "radarr", "lidarr"}:
+            coros[name] = asyncio.create_task(_queue_for_service(svc, limit))
+    sources: list[QueueStatusAllSource] = []
+    for name in sorted(coros.keys()):
+        sources.append(await coros[name])
+    return sources
+
+
+async def _queue_for_service(svc: ServiceConfig, limit: int) -> QueueStatusAllSource:
+    try:
+        if svc.name == "sonarr":
+            return await _queue_sonarr(svc, limit)
+        if svc.name == "radarr":
+            return await _queue_radarr(svc, limit)
+        if svc.name == "lidarr":
+            return await _queue_lidarr(svc, limit)
+    except Exception as exc:
+        return QueueStatusAllSource(source=svc.name, count=0, total=0, items=[], error=f"{type(exc).__name__}: {exc}")
+    return QueueStatusAllSource(source=svc.name, count=0, total=0, items=[], error=f"unknown service: {svc.name!r}")
+
+
+async def _queue_sonarr(svc: ServiceConfig, limit: int) -> QueueStatusAllSource:
+    from arr_stack_mcp.generated.sonarr.api.queue import get_api_v3_queue
+    from arr_stack_mcp.tools.sonarr._client import make_sonarr_client
+
+    client = make_sonarr_client(svc)
+    page = await get_api_v3_queue.asyncio(
+        client=client,
+        page=1,
+        page_size=limit,
+        include_series=True,
+        include_episode=True,
+    )
+    return _project_arr_queue("sonarr", page, entity_attr="series_id")
+
+
+async def _queue_radarr(svc: ServiceConfig, limit: int) -> QueueStatusAllSource:
+    from arr_stack_mcp.generated.radarr.api.queue import get_api_v3_queue
+    from arr_stack_mcp.tools.radarr._client import make_radarr_client
+
+    client = make_radarr_client(svc)
+    page = await get_api_v3_queue.asyncio(
+        client=client,
+        page=1,
+        page_size=limit,
+        include_movie=True,
+    )
+    return _project_arr_queue("radarr", page, entity_attr="movie_id")
+
+
+async def _queue_lidarr(svc: ServiceConfig, limit: int) -> QueueStatusAllSource:
+    from arr_stack_mcp.generated.lidarr.api.queue import get_api_v1_queue
+    from arr_stack_mcp.tools.lidarr._client import make_lidarr_client
+
+    client = make_lidarr_client(svc)
+    page = await get_api_v1_queue.asyncio(
+        client=client,
+        page=1,
+        page_size=limit,
+        include_artist=True,
+        include_album=True,
+    )
+    return _project_arr_queue("lidarr", page, entity_attr="artist_id")
+
+
+def _project_arr_queue(source: str, page: object, *, entity_attr: str) -> QueueStatusAllSource:
+    """Common projection from a Servarr `*.queue` page response into our normalized shape."""
+    if page is None:
+        return QueueStatusAllSource(source=source, count=0, total=0, items=[])
+    records_attr = getattr(page, "records", None)
+    if records_attr is None or not isinstance(records_attr, list):
+        return QueueStatusAllSource(source=source, count=0, total=0, items=[])
+    items: list[StackQueueItem] = []
+    for r in records_attr:
+        size = _safe_int(getattr(r, "size", None)) or 0
+        size_left = _safe_int(getattr(r, "sizeleft", None)) or _safe_int(getattr(r, "size_left", None)) or 0
+        progress = 0.0 if size == 0 else (1.0 - (size_left / size)) * 100.0
+        items.append(
+            StackQueueItem(
+                source=source,
+                queue_id=_safe_int(getattr(r, "id", None)) or 0,
+                entity_id=_safe_int(getattr(r, entity_attr, None)),
+                title=str(getattr(r, "title", "") or "<unknown>"),
+                status=str(getattr(r, "status", "") or "unknown"),
+                progress_pct=round(progress, 1),
+                size=size,
+                size_left=size_left,
+                estimated_completion=_safe_dt(getattr(r, "estimated_completion_time", None)),
+                download_client=_safe_str(getattr(r, "download_client", None)),
+                protocol=_safe_str(getattr(r, "protocol", None)),
+            )
+        )
+    total = _safe_int(getattr(page, "total_records", None)) or len(items)
+    return QueueStatusAllSource(source=source, count=len(items), total=total, items=items)
+
+
+# ---------- shared safe-coerce helpers ----------
+
+
+def _safe_int(v: object) -> int | None:
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return int(v)
+    if isinstance(v, int):
+        return v
+    if isinstance(v, (str, float)):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _safe_str(v: object) -> str | None:
+    if v is None:
+        return None
+    inner = getattr(v, "value", None)
+    if inner is not None:
+        return str(inner)
+    s = str(v)
+    if s == "UNSET":
+        return None
+    return s
+
+
+def _safe_dt(v: object) -> str | None:
+    if v is None:
+        return None
+    if hasattr(v, "isoformat"):
+        return v.isoformat()  # type: ignore[no-any-return]
+    return str(v)

@@ -203,3 +203,135 @@ async def test_health_handler_marks_disabled_service() -> None:
     assert row.version is None
     # Vacuous overall_ok — no enabled services to fail.
     assert result.overall_ok is True
+
+
+# ---------- stack.find_anywhere ----------
+
+
+async def test_find_anywhere_no_services_returns_empty() -> None:
+    from arr_stack_mcp.tools.stack._models import FindAnywhereInput
+
+    p = _policy()
+    mcp = _register_stack(p, Config())
+    handler = mcp.handlers["stack.find_anywhere"]
+    result = await handler(FindAnywhereInput(query="dune"))  # type: ignore[operator]
+    assert result.ok is True
+    assert result.query == "dune"
+    assert result.total_count == 0
+    assert result.sources == []
+
+
+async def test_find_anywhere_skips_disabled_services() -> None:
+    """A disabled arr is omitted from the source list entirely."""
+    from pydantic import HttpUrl
+
+    from arr_stack_mcp.config import ServiceConfig
+    from arr_stack_mcp.tools.stack._models import FindAnywhereInput
+
+    cfg = Config(
+        services={"sonarr": ServiceConfig(name="sonarr", enabled=False, url=HttpUrl("http://localhost:8989"))},
+        policy=PolicyConfig(),
+    )
+    p = _policy()
+    mcp = _register_stack(p, cfg)
+    handler = mcp.handlers["stack.find_anywhere"]
+    result = await handler(FindAnywhereInput(query="dune"))  # type: ignore[operator]
+    assert result.sources == []
+
+
+# ---------- stack.queue_status_all ----------
+
+
+async def test_queue_status_all_no_services_returns_empty() -> None:
+    from arr_stack_mcp.tools.stack._models import QueueStatusAllInput
+
+    p = _policy()
+    mcp = _register_stack(p, Config())
+    handler = mcp.handlers["stack.queue_status_all"]
+    result = await handler(QueueStatusAllInput())  # type: ignore[operator]
+    assert result.ok is True
+    assert result.total_count == 0
+    assert result.sources == []
+
+
+def test_project_arr_queue_handles_empty_page() -> None:
+    """`page is None` and missing-records both project to empty source rows without crashing."""
+    from arr_stack_mcp.tools.stack.tools import _project_arr_queue
+
+    out = _project_arr_queue("sonarr", None, entity_attr="series_id")
+    assert out.source == "sonarr"
+    assert out.count == 0
+    assert out.total == 0
+    assert out.items == []
+
+
+def test_project_arr_queue_records_normalized() -> None:
+    """Real upstream queue rows project into StackQueueItem with progress + entity_id."""
+    from types import SimpleNamespace
+
+    from arr_stack_mcp.tools.stack.tools import _project_arr_queue
+
+    page = SimpleNamespace(
+        total_records=2,
+        records=[
+            SimpleNamespace(
+                id=10,
+                series_id=42,
+                title="dune.s01e01",
+                status="downloading",
+                size=1000,
+                sizeleft=250,
+                estimated_completion_time=None,
+                download_client="qbit",
+                protocol="torrent",
+            ),
+            SimpleNamespace(
+                id=11,
+                series_id=99,
+                title="dune.s01e02",
+                status="completed",
+                size=1000,
+                sizeleft=0,
+                estimated_completion_time=None,
+                download_client="qbit",
+                protocol="torrent",
+            ),
+        ],
+    )
+    out = _project_arr_queue("sonarr", page, entity_attr="series_id")
+    assert out.source == "sonarr"
+    assert out.count == 2
+    assert out.total == 2
+    assert out.items[0].queue_id == 10
+    assert out.items[0].entity_id == 42
+    # 750 of 1000 bytes complete = 75.0% progress
+    assert out.items[0].progress_pct == 75.0
+    # second row: 100% complete
+    assert out.items[1].progress_pct == 100.0
+
+
+def test_project_arr_queue_handles_zero_size() -> None:
+    """A queue row with size=0 doesn't divide-by-zero on progress; reports 0.0%."""
+    from types import SimpleNamespace
+
+    from arr_stack_mcp.tools.stack.tools import _project_arr_queue
+
+    page = SimpleNamespace(
+        total_records=1,
+        records=[
+            SimpleNamespace(
+                id=5,
+                series_id=1,
+                title="x",
+                status="grabbing",
+                size=0,
+                sizeleft=0,
+                estimated_completion_time=None,
+                download_client=None,
+                protocol=None,
+            ),
+        ],
+    )
+    out = _project_arr_queue("sonarr", page, entity_attr="series_id")
+    assert out.items[0].progress_pct == 0.0
+    assert out.items[0].download_client is None
