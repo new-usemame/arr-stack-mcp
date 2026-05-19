@@ -21,6 +21,7 @@ from arr_stack_mcp.generated.jellyfin.api.system import (
     get_public_system_info,
     get_system_info,
 )
+from arr_stack_mcp.generated.jellyfin.api.user import get_users
 from arr_stack_mcp.generated.jellyfin.api.user_library import get_latest_media
 from arr_stack_mcp.generated.jellyfin.client import AuthenticatedClient
 from arr_stack_mcp.generated.jellyfin.types import UNSET
@@ -28,6 +29,7 @@ from arr_stack_mcp.policy import Tag
 from arr_stack_mcp.tools.jellyfin._client import make_jellyfin_client
 from arr_stack_mcp.tools.jellyfin._models import (
     JellyfinItem,
+    JellyfinUser,
     LibrarySearchInput,
     RecentAdditionsInput,
     RecentAdditionsResult,
@@ -38,6 +40,8 @@ from arr_stack_mcp.tools.jellyfin._models import (
     SessionsResult,
     StatusResult,
     SystemInfo,
+    UsersListInput,
+    UsersListResult,
 )
 
 if TYPE_CHECKING:
@@ -97,7 +101,12 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
             )
 
         include_kinds = _kinds_or_unset(args.types)
-        user_id = _user_uuid_or_unset(default_user_id)
+        # Per-call `user_id=` wins over `services.jellyfin.default_user_id`
+        # from config. Either applies the user's policy server-side (Jellyfin
+        # filters by `EnabledFolders` / `EnableAllFolders` / `BlockedTags`).
+        # Consumers (ibis-bot) use this to scope per-Matrix-sender library
+        # views; the MCP itself does not know about senders.
+        user_id = _user_uuid_or_unset(args.user_id or default_user_id)
 
         # Primary path: ask Jellyfin's SearchTerm. Fast, server-side, handles
         # typical "the office" / "dune" queries.
@@ -119,6 +128,7 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
         # SearchTerm and apply our own acronym-aware relevance filter locally.
         # Jellyfin's SearchTerm is fuzzy-but-not-acronym-aware. See
         # notes/RESEARCH-ibis-bot-followups.md for the source of this pattern.
+        # The same `user_id` scoping carries through.
         if not primary_items and looks_like_acronym(args.query):
             wide = await get_items.asyncio(
                 client=client,
@@ -156,7 +166,8 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
         name="jellyfin.recent_additions",
         description=(
             "List items recently added to Jellyfin. Returns up to ``limit`` items "
-            "(newest first). Restrict to one library by passing its id as ``parent_id``."
+            "(newest first). Restrict to one library by passing its id as ``parent_id``. "
+            "Pass ``user_id`` for per-user scoping, or omit to use the configured default."
         ),
     )
     async def jellyfin_recent_additions(args: RecentAdditionsInput) -> RecentAdditionsResult:
@@ -164,11 +175,13 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
         if not isinstance(client, AuthenticatedClient):
             raise ToolError(message="jellyfin.recent_additions: requires API key")
 
-        user_id = _user_uuid_or_unset(default_user_id)
+        # Per-call user_id wins over config default. Either resolves to a UUID
+        # passed to the upstream get_latest_media call.
+        user_id = _user_uuid_or_unset(args.user_id or default_user_id)
         if user_id is UNSET:
             raise ToolError(
-                message="jellyfin.recent_additions: needs a default_user_id",
-                hint="set services.jellyfin.default_user_id in arr-stack-mcp.yaml",
+                message="jellyfin.recent_additions: needs a user_id (per-call arg or services.jellyfin.default_user_id)",
+                hint="pass user_id= (obtain via jellyfin.users_list) or set services.jellyfin.default_user_id in arr-stack-mcp.yaml",
             )
         parent_uuid = _str_to_uuid_or_unset(args.parent_id)
         result = await get_latest_media.asyncio(
@@ -182,6 +195,35 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
             return RecentAdditionsResult(count=0, items=[])
         items = [_basic_item_to_jf_item(it) for it in result]
         return RecentAdditionsResult(count=len(items), items=items)
+
+    @mcp.tool(
+        name="jellyfin.users_list",
+        description=(
+            "List Jellyfin user accounts. Each entry carries `user_id` (UUID), `name`, "
+            "`is_administrator`, `has_password`, and `last_login_date`. Use this to build a "
+            "consumer-side mapping from external identity (e.g. a Matrix sender) to a Jellyfin "
+            "user, then pass `user_id=` to per-user tools like `jellyfin.library_search` and "
+            "`jellyfin.recent_additions`. The MCP server uses one admin API key for all calls; "
+            "this tool requires that key to have admin scope on the Jellyfin side (returns 403 "
+            "if the key is user-scoped)."
+        ),
+    )
+    async def jellyfin_users_list(args: UsersListInput) -> UsersListResult:
+        policy.check("jellyfin.users_list", Tag.READ)
+        if not isinstance(client, AuthenticatedClient):
+            raise ToolError(
+                message="jellyfin.users_list: requires API key",
+                hint="set JELLYFIN_API_KEY in env or services.jellyfin.api_key in config",
+            )
+        # `is_hidden=False` / `is_disabled=False` filter to active+visible users
+        # by default; opt-in to either via the input flags.
+        is_hidden = UNSET if args.include_hidden else False
+        is_disabled = UNSET if args.include_disabled else False
+        users = await get_users.asyncio(client=client, is_hidden=is_hidden, is_disabled=is_disabled)
+        if not isinstance(users, list):
+            return UsersListResult(count=0, users=[])
+        compact = [_user_to_compact(u) for u in users]
+        return UsersListResult(count=len(compact), users=compact)
 
     @mcp.tool(
         name="jellyfin.now_playing",
@@ -334,6 +376,26 @@ def _is_session_active(s: object) -> bool:
     """Sessions with no now_playing_item are idle — filter them out."""
     now_playing = getattr(s, "now_playing_item", None)
     return now_playing is not None and not isinstance(now_playing, type(UNSET))
+
+
+def _user_to_compact(u: object) -> JellyfinUser:
+    """Project a generated `UserDto` into our compact `JellyfinUser` shape.
+
+    `is_administrator` lives on `u.policy.is_administrator`. The policy field
+    may be `Unset` if the API key lacks admin scope; in that case we
+    default to `False` (callers that need admin status can re-key).
+    """
+    policy_obj = getattr(u, "policy", None)
+    is_admin = False
+    if policy_obj is not None and not isinstance(policy_obj, type(UNSET)):
+        is_admin = _bool_or_none(getattr(policy_obj, "is_administrator", None)) or False
+    return JellyfinUser(
+        user_id=str(getattr(u, "id", "")),
+        name=_str_or_none(getattr(u, "name", None)) or "<unknown>",
+        is_administrator=is_admin,
+        has_password=_bool_or_none(getattr(u, "has_password", None)),
+        last_login_date=_dt_or_none(getattr(u, "last_login_date", None)),
+    )
 
 
 def _kind_to_str(v: object) -> str | None:

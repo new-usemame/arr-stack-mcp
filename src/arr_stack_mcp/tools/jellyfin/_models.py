@@ -52,6 +52,23 @@ class SystemInfo(BaseModel):
     id: str | None = None
 
 
+class JellyfinUser(BaseModel):
+    """Compact view of a Jellyfin user account. Returned by ``jellyfin.users_list``.
+
+    Designed so a consumer (e.g. ibis-bot) can map an external identity to a
+    Jellyfin user id at session start: take ``name`` (or a friendly mapping
+    of it) to resolve a sender; carry ``user_id`` through subsequent calls
+    that accept ``user_id=``. ``is_administrator`` lets the consumer gate
+    admin-only operations before the MCP call.
+    """
+
+    user_id: str = Field(description="Jellyfin user UUID. Pass as `user_id=` to per-user tools.")
+    name: str
+    is_administrator: bool = False
+    has_password: bool | None = None
+    last_login_date: str | None = None
+
+
 # --- Input schemas ---
 
 
@@ -66,6 +83,15 @@ class LibrarySearchInput(BaseModel):
         ),
     )
     limit: int = Field(default=20, ge=1, le=100)
+    user_id: str | None = Field(
+        default=None,
+        description=(
+            "Jellyfin user UUID. When set, scopes the search to that user's accessible libraries. "
+            "When omitted, falls back to `services.jellyfin.default_user_id` from config. "
+            "Obtain via `jellyfin.users_list`. Consumers (e.g. ibis-bot) use this to honor per-user "
+            "library scoping."
+        ),
+    )
 
 
 class RecentAdditionsInput(BaseModel):
@@ -76,6 +102,14 @@ class RecentAdditionsInput(BaseModel):
         default=None,
         description="Restrict to a single library by its id. Omit for all libraries.",
     )
+    user_id: str | None = Field(
+        default=None,
+        description=(
+            "Jellyfin user UUID. When set, scopes the recent-additions list to that user's accessible "
+            "libraries (Jellyfin filters via `EnabledFolders` / `EnableAllFolders` in the user's policy). "
+            "When omitted, falls back to `services.jellyfin.default_user_id` from config."
+        ),
+    )
 
 
 class ScanLibraryInput(BaseModel):
@@ -84,6 +118,25 @@ class ScanLibraryInput(BaseModel):
     library_id: str | None = Field(
         default=None,
         description="Specific library id to scan. Omit to refresh all libraries.",
+    )
+
+
+class UsersListInput(BaseModel):
+    """List Jellyfin user accounts.
+
+    The MCP server uses one admin API key for all calls; per-user scoping
+    happens via the `user_id` argument on each per-user tool. This tool
+    returns the catalog of users so consumers can build their own
+    sender-to-Jellyfin-user mapping.
+    """
+
+    include_disabled: bool = Field(
+        default=False,
+        description="Include accounts the admin has marked disabled. Default false (matches the typical 'who are my users?' question).",
+    )
+    include_hidden: bool = Field(
+        default=False,
+        description="Include accounts the admin has marked hidden from public login screens. Default false.",
     )
 
 
@@ -122,3 +175,9 @@ class ScanResult(BaseModel):
     ok: bool = True
     msg: str
     library_id: str | None = None
+
+
+class UsersListResult(BaseModel):
+    ok: bool = True
+    count: int
+    users: list[JellyfinUser]
