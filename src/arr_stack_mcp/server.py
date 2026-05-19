@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from arr_stack_mcp._mcp import FastMCP
+from arr_stack_mcp.auth import DEFAULT_BEARER_TOKEN_ENV, StaticBearerVerifier, is_loopback_host, resolve_bearer_token
 from arr_stack_mcp.config import Config, ServiceConfig, load_config
 from arr_stack_mcp.policy import Policy
 
@@ -16,6 +17,16 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 
+class BearerRequired(RuntimeError):
+    """Streamable-HTTP transport bound to a non-loopback host without a configured bearer token.
+
+    Raised at boot so the operator sees the misconfiguration before any tool
+    is registered. The error message names the env var the operator should
+    set; the verification helper is module-level so tests can exercise it
+    without spinning a real uvicorn process.
+    """
+
+
 def run(
     *,
     config_path: str | None,
@@ -23,6 +34,7 @@ def run(
     read_only: bool,
     disable_destructive: bool,
     dry_run: bool = False,
+    bearer_token_env: str = DEFAULT_BEARER_TOKEN_ENV,
 ) -> None:
     """Boot the MCP server. Pure orchestration; the per-service registration lives in arr_stack_mcp.tools.*."""
     cfg = load_config(config_path)
@@ -32,7 +44,12 @@ def run(
         disable_destructive=disable_destructive or cfg.policy.disable_destructive,
         dry_run=dry_run or cfg.policy.dry_run,
     )
-    mcp = build_server(cfg, policy)
+
+    # Resolve bearer auth ahead of FastMCP construction so a misconfigured
+    # non-loopback bind fails fast, before any per-service registration cost.
+    token_verifier = _resolve_token_verifier(cfg, transport, bearer_token_env)
+
+    mcp = build_server(cfg, policy, token_verifier=token_verifier)
 
     log.info(
         "starting",
@@ -41,6 +58,9 @@ def run(
         read_only=policy.read_only,
         disable_destructive=policy.disable_destructive,
         dry_run=policy.dry_run,
+        bearer_auth=token_verifier is not None,
+        http_host=cfg.transport.http_host if transport != "stdio" else None,
+        http_port=cfg.transport.http_port if transport != "stdio" else None,
     )
 
     if transport == "stdio":
@@ -51,9 +71,42 @@ def run(
         raise ValueError(f"unknown transport: {transport!r}")
 
 
-def build_server(cfg: Config, policy: Policy) -> FastMCP:
+def _resolve_token_verifier(cfg: Config, transport: str, bearer_token_env: str) -> StaticBearerVerifier | None:
+    """Decide whether to construct a bearer verifier and enforce the non-loopback policy.
+
+    Returns None when no auth applies (stdio transport, or streamable-HTTP on
+    loopback without a configured token). Returns a `StaticBearerVerifier`
+    when a token is configured. Raises `BearerRequired` when the transport
+    is streamable-HTTP, the bind is non-loopback, and no token is set.
+    """
+    if transport == "stdio":
+        return None
+
+    host = cfg.transport.http_host
+    token = resolve_bearer_token(bearer_token_env)
+
+    if token is None:
+        if is_loopback_host(host):
+            return None
+        raise BearerRequired(
+            f"streamable-HTTP transport is binding to {host!r} (non-loopback) but no bearer token is set. "
+            f"Set the {bearer_token_env} env var, or change the bind host to 127.0.0.1 in policy.transport.http_host."
+        )
+
+    return StaticBearerVerifier(expected_token=token)
+
+
+def build_server(cfg: Config, policy: Policy, *, token_verifier: StaticBearerVerifier | None = None) -> FastMCP:
     """Construct the FastMCP server with every enabled toolset registered. Pulled out for testability."""
-    mcp = FastMCP(name="arr-stack-mcp", instructions=_server_instructions(cfg))
+    fastmcp_kwargs: dict[str, object] = {
+        "name": "arr-stack-mcp",
+        "instructions": _server_instructions(cfg),
+        "host": cfg.transport.http_host,
+        "port": cfg.transport.http_port,
+    }
+    if token_verifier is not None:
+        fastmcp_kwargs["token_verifier"] = token_verifier
+    mcp = FastMCP(**fastmcp_kwargs)  # type: ignore[arg-type]
 
     for svc in _enabled_services(cfg):
         _register_service(mcp, svc, cfg, policy)

@@ -56,6 +56,14 @@ def serve(
             "synthetic success envelope without firing the upstream mutation. READ tools are unaffected."
         ),
     ),
+    bearer_token_env: str = typer.Option(
+        "ARR_STACK_MCP_BEARER_TOKEN",
+        "--bearer-token-env",
+        help=(
+            "Env var to read the streamable-HTTP bearer token from. Only consulted when transport is "
+            "streamable-http. A non-loopback bind without a token in this env var refuses to start."
+        ),
+    ),
 ) -> None:
     """Boot the MCP server. Loads config, registers enabled toolsets, starts the chosen transport."""
     from arr_stack_mcp.server import run
@@ -66,6 +74,7 @@ def serve(
         read_only=read_only,
         disable_destructive=disable_destructive,
         dry_run=dry_run,
+        bearer_token_env=bearer_token_env,
     )
 
 
