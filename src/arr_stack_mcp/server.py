@@ -111,6 +111,12 @@ def build_server(cfg: Config, policy: Policy, *, token_verifier: StaticBearerVer
     for svc in _enabled_services(cfg):
         _register_service(mcp, svc, cfg, policy)
 
+    # `stack.*` composables are always registered (cross-service; not gated
+    # on any single service's `enabled:` flag).
+    from arr_stack_mcp.tools.stack import register as register_stack
+
+    register_stack(mcp, cfg, policy)
+
     return mcp
 
 
