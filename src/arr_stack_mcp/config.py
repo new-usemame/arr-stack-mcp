@@ -4,12 +4,15 @@ Schema is a thin Pydantic model. Loaded from a YAML file path or
 ``~/.config/arr-stack-mcp/config.yaml``. Every secret can be supplied via env
 var so the YAML can be checked in and the keys provisioned separately.
 
-The init wizard probes localhost ports and common docker-compose hostnames
-(sonarr / radarr / lidarr / prowlarr / jellyfin), then writes a starter file.
+The init wizard probes a small grid of (host, scheme) combinations per
+service — localhost + 127.0.0.1 + host.docker.internal + the docker-compose
+service hostname + the same hostname with `.lan` suffix for mDNS — then
+writes a starter file. See notes/DESIGN-v0.2.md §1.6.
 """
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -151,7 +154,7 @@ def init_config(*, out_path: str, force: bool) -> None:
             raise typer.Exit(code=1)
 
     typer.echo("== arr-stack-mcp init ==")
-    typer.echo("Probing localhost for running services...")
+    typer.echo("Probing localhost, docker-compose hostnames, host.docker.internal, and *.lan mDNS for running services...")
     found = _probe_services()
     for svc, url in found.items():
         typer.echo(f"  {svc}: {url or 'not found'}")
@@ -180,24 +183,73 @@ def init_config(*, out_path: str, force: bool) -> None:
     target.write_text(yaml.safe_dump(template, sort_keys=False))
     typer.echo(f"Wrote {target}")
     typer.echo("Next: set API keys via env vars (SONARR_API_KEY, etc.), then run `arr-stack-mcp serve`.")
+    typer.echo(
+        "If any service runs behind a reverse proxy (https://sonarr.mydomain.com), the wizard cannot auto-probe it. "
+        f"Edit the `url:` for that service in {target} by hand.",
+    )
+
+
+# Hosts the wizard tries for every service, in order of preference. The first
+# successful (host, scheme) wins. Operators on reverse-proxied deployments
+# (https://sonarr.mydomain.com) cannot be auto-probed — the wizard surfaces a
+# reminder to set those URLs manually after writing the starter config.
+_PROBE_HOSTS_GENERIC: tuple[str, ...] = ("localhost", "127.0.0.1", "host.docker.internal")
+_PROBE_SCHEMES: tuple[str, ...] = ("http", "https")
+# Per-probe timeout. Set short so DNS misses (`*.lan` on a network without
+# mDNS) and unreachable hosts fail fast.
+_PROBE_TIMEOUT_SECONDS: float = 1.5
+
+
+def _candidate_hosts_for(service: str) -> list[str]:
+    """Hosts to probe for one service. Generic loopbacks + the docker-compose service hostname + mDNS."""
+    return [*_PROBE_HOSTS_GENERIC, service, f"{service}.lan"]
+
+
+async def _probe_one(scheme: str, host: str, port: int, path: str) -> bool:
+    """Single probe: GET ``{scheme}://{host}:{port}{path}`` and report whether the response looks healthy.
+
+    200 (open) and 401 (up but needs API key) both count as "service present."
+    """
+    url = f"{scheme}://{host}:{port}{path}"
+    try:
+        async with httpx.AsyncClient(timeout=_PROBE_TIMEOUT_SECONDS, verify=False) as client:
+            resp = await client.get(url)
+    except httpx.HTTPError:
+        return False
+    return resp.status_code in {200, 401}
+
+
+async def _probe_service(service: str, port: int, path: str) -> tuple[str, str | None]:
+    """Probe every (host, scheme) combination for one service. First success wins.
+
+    Probes run concurrently; the first hit determines the result and the
+    remaining requests still complete in the background (their results are
+    discarded but the connections close cleanly via the asyncgen lifecycle).
+    """
+    hosts = _candidate_hosts_for(service)
+    targets = [(scheme, host) for host in hosts for scheme in _PROBE_SCHEMES]
+    results = await asyncio.gather(
+        *(_probe_one(scheme, host, port, path) for scheme, host in targets),
+        return_exceptions=False,
+    )
+    for (scheme, host), ok in zip(targets, results, strict=True):
+        if ok:
+            return service, f"{scheme}://{host}:{port}"
+    return service, None
+
+
+async def _probe_services_async() -> dict[str, str | None]:
+    """Probe every configured service concurrently. ~1.5s worst-case wall time."""
+    results = await asyncio.gather(
+        *(_probe_service(svc, port, _SERVICE_PROBE_PATHS[svc]) for svc, port in _SERVICE_DEFAULT_PORTS.items()),
+    )
+    return dict(results)
 
 
 def _probe_services() -> dict[str, str | None]:
-    """Probe localhost for each service. Returns the URL if a service responds within 1 second, else None. Pure GET, no mutation."""
-    found: dict[str, str | None] = {}
-    for svc, port in _SERVICE_DEFAULT_PORTS.items():
-        path = _SERVICE_PROBE_PATHS[svc]
-        for scheme in ("http", "https"):
-            url = f"{scheme}://localhost:{port}"
-            try:
-                # Probe accepts self-signed certs — local dev clusters routinely use them.
-                with httpx.Client(timeout=1.0, verify=False) as client:
-                    resp = client.get(f"{url}{path}")
-                if resp.status_code in {200, 401}:  # 401 = service is up but needs key
-                    found[svc] = url
-                    break
-            except httpx.HTTPError:
-                continue
-        else:
-            found[svc] = None
-    return found
+    """Sync wrapper for the async probe — keeps ``init_config``'s call-site unchanged.
+
+    Each service is probed against five hosts crossed with two schemes in
+    parallel. First successful response (200 or 401) wins.
+    """
+    return asyncio.run(_probe_services_async())
