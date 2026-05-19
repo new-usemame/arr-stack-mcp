@@ -1,16 +1,17 @@
-# Goal: arr-stack-mcp v0.2 — universal install + in-scope ibis-bot patterns + ibis-bot migrated off its hand-rolled httpx layer
+# Goal: arr-stack-mcp v0.2 + book-stack-mcp v0.1 + ibis-bot migrated off its hand-rolled transport to both MCPs
 
-You are Claude Opus 4.7 or higher — Max Ultra tier, high context window. You are running with full agency to research, design, implement, test, and publish v0.2 of arr-stack-mcp on Alex's behalf, AND to migrate the operator's locally-developed Matrix tool runner (ibis-bot at `defaultuser@10.0.30.36:~/ibis-bot/`) off its hand-rolled arr+Jellyfin transport so it goes through arr-stack-mcp instead. **No cope. No bandaids. Find root causes. Test against real containers, a real MCP client, and ibis-bot's real e2e suite — never mocks.** If you can't measure it, you don't know it. If something seems hard, you haven't dug deep enough yet.
+You are Claude Opus 4.7 or higher — Max Ultra tier, high context window. You are running with full agency to research, design, implement, test, and publish v0.2 of arr-stack-mcp on Alex's behalf, **build a new sibling project `book-stack-mcp` v0.1.0 from scratch**, AND migrate the operator's locally-developed Matrix tool runner (ibis-bot at `defaultuser@10.0.30.36:~/ibis-bot/`) off its hand-rolled httpx layer so it goes through both MCPs instead. **No cope. No bandaids. Find root causes. Test against real containers, a real MCP client, and ibis-bot's real e2e suite — never mocks.** If you can't measure it, you don't know it. If something seems hard, you haven't dug deep enough yet.
 
 You have a large context window. Use it. Read the codebase, the prior research notes, the upstream specs, and ibis-bot's current source thoroughly before designing anything. This prompt sets the goal and the constraints — it does not enumerate implementation steps. That's your job.
 
 ## Mission
 
-Three intertwined deliverables, one release window.
+Four intertwined deliverables, one release window.
 
 1. **arr-stack-mcp v0.2.0** — Prowlarr + cross-service `stack.*` tools + the in-scope ibis-bot patterns v0.1 deferred. Cut from `github.com/new-usemame/arr-stack-mcp` via release-please.
-2. **Universal install** — anyone running an arr stack should install and configure arr-stack-mcp in under five minutes via the path of their choice (uvx, PyPI, Docker, Claude Desktop one-click bundle if mature). Streamable-HTTP transport with bearer auth. An `init` wizard that just works on a typical home-lab setup. A config-by-env-var story documented end-to-end. Per-platform Claude Desktop config snippets (macOS, Windows, Linux).
-3. **ibis-bot migration** — `~/ibis-bot/tools/arrs.py` and `~/ibis-bot/tools/jellyfin.py` deleted on teenyverse; ibis-bot's tool registry now sources those tools from `arr-stack-mcp serve --transport stdio` via the standard MCP stdio client. Calibre / LazyLibrarian / Anna's Archive / Matrix / watcher / per-user-Matrix-scoping stay native to ibis-bot. The migration must keep ibis-bot's 10-scenario `data/test_e2e.py` suite passing, redeploy cleanly, and not interrupt Alex + Maggie's live Matrix usage.
+2. **book-stack-mcp v0.1.0** — new sibling project at `/Users/acoundou/Other Projects/book-stack-mcp/` and `github.com/new-usemame/book-stack-mcp`. Mirror arr-stack-mcp's architecture (two-layer auto-gen + curated, dotted MCP namespacing, pydantic in/out, MIT, release-please, GHCR + PyPI signed). Covers LazyLibrarian, Anna's Archive direct-download, Calibre / Calibre-Web (via CWNG's HTTP surface where it exists; via direct SQLite where it doesn't — CW lacks a JSON shelf API), reading-status tracking, author-follow / new-release watching.
+3. **Universal install for both MCPs** — anyone with an arr or book stack installs and configures the relevant MCP in under five minutes via the path of their choice (uvx, PyPI, Docker, Claude Desktop one-click bundle if mature). Streamable-HTTP transport with bearer auth. An `init` wizard that just works on a typical home-lab setup. A config-by-env-var story documented end-to-end. Per-platform Claude Desktop config snippets. Both MCPs install side-by-side and the consumer (Claude Desktop, ibis-bot, n8n, etc.) loads both.
+4. **ibis-bot migration** — `~/ibis-bot/tools/arrs.py`, `~/ibis-bot/tools/jellyfin.py`, `~/ibis-bot/tools/lazylibrarian.py`, `~/ibis-bot/tools/aa_*.py`, `~/ibis-bot/tools/calibre.py`, `~/ibis-bot/tools/reading.py`, `~/ibis-bot/tools/follow.py`, `~/ibis-bot/tools/discover.py`, `~/ibis-bot/tools/bulk.py`, `~/ibis-bot/tools/music.py`, `~/ibis-bot/tools/series.py` deleted on teenyverse. ibis-bot's tool registry now sources those tools from `arr-stack-mcp serve --transport stdio` AND `book-stack-mcp serve --transport stdio` via the standard MCP stdio client. Matrix / watcher / per-user-Matrix-scoping / OpenRouter ReAct loop / SYSTEM_PROMPT / room ACL / E2EE-via-Pantalaimon stay native to ibis-bot. The migration must keep ibis-bot's 10-scenario `data/test_e2e.py` suite passing, redeploy cleanly, and not interrupt Alex + Maggie's live Matrix usage.
 
 ## Hard preconditions (refuse if any fail)
 
@@ -52,20 +53,70 @@ Don't take this prompt as a prescription. Build your own model by reading. The s
 
 ibis-bot evolved after our Phase A snapshot. The fresh source is at `defaultuser@10.0.30.36:~/ibis-bot/`. The files you care about most:
 
-- `tools/arrs.py` — Sonarr + Radarr + Lidarr wrappers, hand-rolled httpx. You will delete this.
-- `tools/jellyfin.py` — Jellyfin wrappers, per-user Matrix-sender mapping. You will delete this.
-- `tools/registry.py` and `tools/__init__.py` — how tools register
-- `tools/dryrun.py` — the IBIS_DRY_RUN pattern. Lift the shape, not the file. Apply at our shared httpx wrapper, not per-handler.
-- `tools/hide_tools.py` — toolset enable/disable
-- `selftest.py` (top-level + `tools/selftest.py`) — parallel `asyncio.gather` health probes with per-probe timeouts and per-probe exception isolation. Port as `stack.health`.
-- `policy.py` — confirm-token lifecycle. Compare against our `src/arr_stack_mcp/policy.py`.
-- `llm.py` — 250-line SYSTEM_PROMPT for ibis-bot's OpenRouter loop. Read it for ideas, but DON'T port verbatim — most of it is Matrix-specific consumer-side. The MCP-relevant lessons (compact-vs-detailed contract, "do not restate tool output", confirm-token discipline, vocabulary mapping) belong in our `instructions` field at a far higher level of abstraction.
-- `bot.py` — how the agent loop calls the tool registry. You'll need to know this for the migration.
+**Will be deleted from ibis-bot in the migration:**
+
+- `tools/arrs.py` — Sonarr + Radarr + Lidarr wrappers, hand-rolled httpx → goes to arr-stack-mcp
+- `tools/jellyfin.py` — Jellyfin wrappers, per-user Matrix-sender mapping → arr-stack-mcp (the Matrix-sender mapping stays in ibis-bot, only the Jellyfin API talking moves)
+- `tools/series.py` — Sonarr series helpers → arr-stack-mcp
+- `tools/music.py` — Lidarr + Jellyfin music tools → arr-stack-mcp
+- `tools/lazylibrarian.py` → book-stack-mcp
+- `tools/aa_check.py`, `tools/aa_direct.py`, `tools/aa_quota.py` → book-stack-mcp
+- `tools/calibre.py` (~63KB, biggest single file) → book-stack-mcp
+- `tools/reading.py` (Reading / Finished / DNF / TBR status tracking) → book-stack-mcp
+- `tools/follow.py` (author follow + new-release watcher) → book-stack-mcp
+- `tools/discover.py` (fuzzy + owned-set + bulk discovery) → split: fuzzy helpers stay in book-stack-mcp's `_fuzzy.py` (book domain); the arr-stack-mcp version already has the v0.1.2 port for arr-flavored fuzzy
+- `tools/bulk.py` (bulk_download_books with two-step confirm) → book-stack-mcp
+
+**Stays native to ibis-bot (do not migrate):**
+
+- `bot.py` — the OpenRouter ReAct loop. ibis-bot remains the LLM driver.
+- `llm.py` — 250-line SYSTEM_PROMPT for the ReAct loop. Matrix-specific.
+- `config.py` — Matrix bot config + per-user allowlist + daily caps
+- `policy.py` — confirm-token gate at the bot layer (different from our MCP-server-side confirm gates)
+- `watcher.py` — the background asyncio task that polls and posts unsolicited "✅ landed" notifications to Matrix. This stays. ibis-bot listens for completion events from both MCPs via their MCP `notifications/resources/updated` if that's how we expose it, or via polling specific status tools.
+- `audit.py`, `store.py` — bot-side audit room + SQLite store (thread_messages, discover_sessions, quota_counters, notify_seen)
+- `tools/context.py`, `tools/hide_tools.py`, `tools/dryrun.py` — bot-side context vars + tool filtering + dry-run env. The dry-run *pattern* gets lifted into both MCPs' shared httpx wrapper; ibis-bot keeps its own env-var for bot-side simulation.
+- `selftest.py` — gets RE-WIRED to call `stack.health` from each MCP rather than running its own probes.
+- `tools/registry.py`, `tools/__init__.py` — registry gets a new adapter that creates MCP-backed Tool entries from the two MCP-stdio sessions opened at bot startup.
+
+**Read for context:**
+
 - `IBIS-WORKFLOW.md` — the design doc
 - `data/test_e2e.py` — the 10-scenario e2e suite. Must stay green after the migration.
-- `docker-compose.yml`, `Dockerfile`, `requirements.txt` — how it's deployed
+- `docker-compose.yml`, `Dockerfile`, `requirements.txt` — how it's deployed. Will need updates: add `mcp>=1.27` + `arr-stack-mcp` + `book-stack-mcp` as deps; the Dockerfile may need to bundle both MCPs or fetch them at boot.
 
-Use `ssh defaultuser@10.0.30.36` (the `FIX-agent-get-into-ssh` skill if interactive; SSH key auth otherwise). Sudo password `Correct-Horse-Battery-9Staple`. Read-only sweeps + `rsync -az` are fine; do not push changes back without confirmation.
+Use `ssh defaultuser@10.0.30.36` (the `FIX-agent-get-into-ssh` skill if interactive; SSH key auth otherwise). Sudo password in the homelab-API-keys memory. Read-only sweeps + `rsync -az` are fine; do not push changes back without confirmation.
+
+### Companion project: book-stack-mcp
+
+Sibling of arr-stack-mcp. Same identity (`new-usemame`), same architecture (two-layer auto-gen + curated, dotted MCP namespacing, pydantic in/out, FastMCP via `mcp.server.fastmcp`, ruff + mypy strict, MIT, release-please, GHCR + PyPI cosign-signed), same tone policy, same verification standard. Lives at `/Users/acoundou/Other Projects/book-stack-mcp/` and `github.com/new-usemame/book-stack-mcp`.
+
+**Upstream surfaces it talks to:**
+
+- **LazyLibrarian** — host `teenyverse 10.0.30.36:8787`. API key `[[reference_homelab_api_keys]]`. No OpenAPI spec; the upstream is sparse on docs. Use ibis-bot's working `tools/lazylibrarian.py` as the reference for which endpoints actually work in practice; thin-client it directly via httpx rather than codegen (the spec is too thin to be worth generating).
+- **Anna's Archive** — `https://annas-archive.gl` only (`.org`/`.se`/`.fi` are NXDOMAIN globally; `.li` is an ad-injected scam clone per `[[reference_homelab_api_keys]]` memory). Lucky-Librarian key at `teenyverse:/home/defaultuser/matrix/.aa-secret-key`. Fast-download API at `/dyn/api/fast_download.json?md5=X&key=Y`. ibis-bot's `tools/aa_direct.py` is the reference.
+- **Calibre-Web-NextGen (CWNG)** — the operator's fork of CW lives at `/Users/acoundou/Other Projects/Calibre-Web-NextGen/`. CWNG runs in production at `teenyverse:8083` (verify port). It has SOME HTTP API beyond CW's standard surface, plus the per-shelf SQLite at `teenyverse:/home/defaultuser/media-stack/config/calibre-web/app.db` (writable) and `metadata.db` (read-only library). Prefer CWNG's HTTP API where it exists; fall back to direct SQLite (as ibis-bot does) where it doesn't.
+- **Hardcover** (book-discovery) — optional. ibis-bot reads `/home/defaultuser/ibis-bot/.hardcover-key` if non-empty; book-stack-mcp should do the same. Currently the file is empty (OL-only); skip until populated.
+- **Open Library** — public, no key. Used for trending / subject / similar / by_author discovery.
+
+**Tool surface to ship in book-stack-mcp v0.1.0:**
+
+- `lazylibrarian.*` — download_book, queue, search_books, status, retry
+- `aa.*` — discover (annas-archive subject/trending/similar), direct_download (Lucky-Librarian fast-download), quota_status
+- `calibre.*` — search_library, list_shelves, create_shelf, delete_shelf, set_shelf_kobo_sync, add_book_to_shelf, remove_book_from_shelf, list_shelf_contents, find_book_in_shelves, recent_library_additions, library_stats, rename_shelf, merge_shelves, clear_shelf, delete_book_from_library, bulk_add_to_shelf, kobo_sync_status
+- `reading.*` — set_reading_status (Reading/Finished/DNF/TBR), reading_status (filter by status)
+- `follow.*` — follow_author, unfollow_author, list_followed_authors. The watcher background task that fires when a new release lands stays in ibis-bot; book-stack-mcp exposes the data, ibis-bot does the polling.
+- `stack.*` — `stack.health`, `stack.dryrun_log`, `stack.report_issue` (target `github.com/new-usemame/book-stack-mcp`). Same shape as arr-stack-mcp.
+
+**Patterns to copy verbatim from arr-stack-mcp:**
+
+- `src/<pkg>/policy.py` — confirm-token lifecycle with payload fingerprint binding
+- `src/<pkg>/errors.py` — diagnostic ToolError envelopes with self-suggesting hints
+- `src/<pkg>/fuzzy.py` — but use a book-domain calibration (author tokens, title-substring-with-trivial-guard, year extraction) rather than the arr-flavored one. ibis-bot's `tools/discover.py:_author_tokens / _title_contains / _owned_index / _is_owned_fuzzy` is the calibrated reference.
+- `src/<pkg>/server.py` — same `_server_instructions()` pattern, content adapted to book-stack
+- `scripts/regen-clients.sh` — pattern; the only generated client is for whatever services actually have OpenAPI specs. LL/AA/Calibre don't; the CWNG HTTP API might (verify).
+
+The book-stack-mcp scope OVERLAPS Calibre-Web-NextGen, but does not duplicate it. CWNG is the *fork of the upstream Calibre-Web web app*. book-stack-mcp is a *thin MCP client surface that talks to CWNG over HTTP/SQLite*. The two install side-by-side. CWNG owns the user-facing web app + ebook ingestion + reader; book-stack-mcp owns the MCP tool surface that agents call.
 
 ### Read the upstream MCP and Servarr surfaces
 
@@ -125,7 +176,7 @@ Apply the Jellyfin LLM contribution policy to every human-facing surface. Hot-li
 
 ## What's in scope vs out
 
-In scope for v0.2 (port from ibis-bot or build natively):
+### In scope for arr-stack-mcp v0.2
 
 - Richer MCP `instructions` field (lift discipline from ibis-bot's SYSTEM_PROMPT, drop the Matrix-specific bits)
 - Per-user Jellyfin scoping (single-user default + per-call `user=` override + `default_user_id` config)
@@ -137,14 +188,21 @@ In scope for v0.2 (port from ibis-bot or build natively):
 - Streamable-HTTP transport with bearer-token auth + constant-time compare
 - Init wizard probe coverage extended (docker-internal, mDNS, reverse-proxy)
 - MCPB / DXT bundle for Claude Desktop one-click install, if mature
+- Daily-cap-per-tool-per-hour rate limiter as runaway-agent protection. Optional; off by default; configured via `policy.daily_caps: {tool_name: int}` in YAML or `ARR_STACK_MCP_DAILY_CAP_<TOOL>=N` env var. Implementation in `policy.py`. ibis-bot's per-user caps were Matrix-driven; for an MCP server with no per-user concept, this is per-process protection against a runaway agent.
 
-Out of scope (different domains; the book stack lives at `/Users/acoundou/Other Projects/Calibre-Web-NextGen/`):
+### In scope for book-stack-mcp v0.1.0
 
-- LazyLibrarian, Anna's Archive, Calibre / Calibre-Web shelves, reading-status tracking, author-follow / new-release watching, Spotify-style music favorites, daily-caps-per-user, Matrix-room awareness, Pantalaimon device verification.
+Same architectural deliverables as arr-stack-mcp v0.1.0 took (research notes, scaffolding, generated clients where applicable, curated tools, docker test stack, integration tests, CI, MCP-client smoke, release). Tool surface listed above under "Companion project: book-stack-mcp". Match arr-stack-mcp's verification standard.
 
-Stays native to ibis-bot during and after the migration:
+### Out of scope (cannot live in an MCP server architecture)
 
-- The OpenRouter ReAct loop, the SYSTEM_PROMPT for that loop, the Matrix room ACL (`-> Operator` allowlist), the watcher background task that posts "✅ landed" notifications, the per-user Matrix-sender → Jellyfin-user mapping, the `IBIS_DRY_RUN` env var (ibis-bot's separate from ours), the SQLite store for discover_sessions / thread_messages / notify_seen, the bulk_download_books two-step UX, every Calibre/LL/AA-flavored tool.
+- **Spotify-style music favorites** — explicitly excluded by the operator.
+- **Pantalaimon device verification** — Pantalaimon is a Matrix E2EE proxy. It runs as a separate process between ibis-bot and the Matrix homeserver. Nothing about it maps to an MCP server. Stays Matrix-side.
+- **Matrix-room awareness / room ACL** — transport-side authentication for the consumer. MCP servers don't have a Matrix concept. ibis-bot's `-> Operator` allowlist stays in `bot.py`.
+
+### Stays native to ibis-bot during and after the migration
+
+The OpenRouter ReAct loop, the SYSTEM_PROMPT for that loop, the Matrix room ACL (`-> Operator` allowlist), the watcher background task that posts unsolicited completion notifications, the per-user Matrix-sender → Jellyfin-user mapping, the bot-side `IBIS_DRY_RUN` env var (separate from the MCPs' dry-run), the SQLite store for discover_sessions / thread_messages / notify_seen, the bulk_download_books two-step "go" UX, audit-room rendering. ibis-bot becomes a thin Matrix shim over the two MCPs plus its own bot-loop concerns.
 
 ## Non-negotiables
 
@@ -158,34 +216,62 @@ Stays native to ibis-bot during and after the migration:
 - **MIT license. Conventional Commits. release-please rolls the tag.** `feat:` minor-bumps to v0.2.0; `fix:` patch-bumps to v0.1.x. Match scope correctly — if you ship ibis-bot-migration parity as a v0.1.x patch first, use `fix:` and let v0.2.0 land later with the user-facing feature deliverables.
 - **Anonymity intact.** Nothing touches gluetun or the AirVPN-scoped port. Nothing pulls live torrent data.
 
-## Deliverables (v0.2.0)
+## Deliverables
+
+### arr-stack-mcp v0.2.0
 
 1. Prowlarr toolset (six tools minimum).
 2. `stack.*` toolset (five tools).
 3. Dry-run mode wired into the shared httpx wrapper + new `stack.dryrun_log` tool surfacing recorded calls.
 4. Per-user Jellyfin scoping (config + per-call override; new `jellyfin.users_list` + `jellyfin.who_can_see` if natural).
-5. `sonarr.series_status`.
+5. `sonarr.series_status` per-season breakdown.
 6. Richer MCP `instructions` field, tone-grepped.
 7. Streamable-HTTP transport with bearer auth, fatal on non-localhost without token.
 8. Init wizard probe coverage widened.
 9. Confirm-token persistence in SQLite at the XDG state path.
-10. MCPB / DXT bundle for Claude Desktop one-click install if mature, else a documented decision to wait with the link to the upstream's readiness status.
-11. v0.2.0 release on PyPI + GHCR + cosign-signed.
-12. `examples/mcp-smoke-v02.py` + transcript.
-13. Extended `examples/mcp-live-homelab.py` + sanitized transcript.
-14. ibis-bot's `tools/arrs.py` + `tools/jellyfin.py` deleted on teenyverse; replaced by MCP-stdio shim. e2e suite green. Container redeployed cleanly.
+10. Daily-cap-per-tool-per-hour rate limiter (config + env-var; off by default).
+11. MCPB / DXT bundle for Claude Desktop one-click install if mature, else a documented decision to wait with the link to the upstream's readiness status.
+12. v0.2.0 release on PyPI + GHCR + cosign-signed.
+13. `examples/mcp-smoke-v02.py` + transcript.
+14. Extended `examples/mcp-live-homelab.py` + sanitized transcript.
 15. README updated to reflect v0.2 surface + universal-install story; ARCHITECTURE.md updated if the two-layer story gained a wrinkle.
+
+### book-stack-mcp v0.1.0
+
+16. Repo provisioned at `github.com/new-usemame/book-stack-mcp`, MIT-licensed, scaffolded with the same shape as arr-stack-mcp (pyproject.toml + uv + ruff + mypy strict + pytest + Conventional Commits + release-please + GHCR + cosign).
+17. Tool surface: `lazylibrarian.*`, `aa.*`, `calibre.*`, `reading.*`, `follow.*`, `stack.*` (~25 tools total based on ibis-bot's working surface).
+18. Generated thin client where it makes sense (CWNG HTTP API if it has an OpenAPI spec); hand-rolled httpx for LL + AA + direct-SQLite for the Calibre shelf operations CW doesn't expose over HTTP.
+19. `docker-compose.test.yml` spinning Calibre-Web (or CWNG) + LazyLibrarian containers for integration tests. AA tests use the live Lucky-Librarian key against `annas-archive.gl` (read-only operations only — no actual downloads in CI).
+20. CI green: ruff + mypy strict + unit + integration + MCP-client live test.
+21. v0.1.0 release on PyPI + GHCR + cosign-signed.
+22. README + ARCHITECTURE.md + CONTRIBUTING.md. Capability matrix.
+23. Live homelab read-only smoke transcript at `examples/mcp-live-homelab.py`.
+
+### ibis-bot migration
+
+24. ibis-bot's deleted-file list (see "Will be deleted from ibis-bot" above) actually deleted from `teenyverse:~/ibis-bot/tools/`.
+25. New adapter at `~/ibis-bot/tools/mcp_adapter.py` (or equivalent) that opens two long-lived MCP stdio sessions at bot startup — one to `arr-stack-mcp serve`, one to `book-stack-mcp serve` — and registers each MCP tool into ibis-bot's existing `REGISTRY` via thin wrappers that preserve `format_result` rendering for Matrix and surface `needs_confirm` / `confirm_token` through ibis-bot's existing two-step UX.
+26. ibis-bot's `Dockerfile` updated to pull both MCPs (either as PyPI deps in `requirements.txt` or as bundled wheels). Compose file updated if needed.
+27. e2e suite at `data/test_e2e.py` re-run end-to-end and 10/10 green under the new wiring BEFORE deletion is committed.
+28. Container redeployed on teenyverse with `docker compose up -d --force-recreate ibis-bot` at a moment when nobody is mid-conversation in the Matrix room. Confirm by calling `selftest` from the bot post-deploy and getting back all-green probes.
+29. Sanitized transcript of a post-migration Matrix exchange (or a `mcp inspector` session) committed to `examples/` showing the bot answering an arr+book query end-to-end.
+
+## Operator hand-off note
+
+CLAUDE.md as it stands today reads "Explicitly NOT Calibre-Web / Calibre-Web-NextGen — that's a separate project." That rule still holds for arr-stack-mcp. **book-stack-mcp is the new home for book-stack tool surface**; CWNG remains the web-app fork. Update arr-stack-mcp's CLAUDE.md to point at book-stack-mcp as the sibling, and create a new CLAUDE.md inside book-stack-mcp mirroring arr-stack-mcp's identity/tone/architecture rules with book-stack adapted scope.
 
 ## Stop conditions
 
 Stop and ask Alex if any of these come up:
 
-- You discover a v0.2 design choice is materially wrong and want to flip it before sinking implementation effort.
+- You discover a v0.2 / v0.1 design choice is materially wrong and want to flip it before sinking implementation effort.
 - ibis-bot's e2e suite fails under the new MCP-backed wiring AND you can't trace the cause to a missing tool or parity gap within one focused investigation.
-- The migration would require deleting more than `tools/arrs.py` and `tools/jellyfin.py` from ibis-bot. If Calibre / LL / AA / watcher / bot.py depends on something inside those modules, scope it back to the operator first.
-- A live home-lab write would touch the gluetun netns, the AirVPN port (47591), the qBit container, or any torrent-adjacent surface.
-- A credential you can't infer from the homelab-API-keys memory + the SSH read paths above.
-- Push access to `github.com/new-usemame/arr-stack-mcp` or `gh auth` for `new-usemame` fails.
+- The migration would require deleting MORE files from ibis-bot than the "Will be deleted" list above. If `bot.py` / `llm.py` / `watcher.py` / `audit.py` / `store.py` / `config.py` / `policy.py` depend on something inside the migrated modules in a way that isn't a clean function-call boundary, scope it back to the operator first.
+- A live home-lab write would touch the gluetun netns, the AirVPN port (47591), the qBit container, or any torrent-adjacent surface. LazyLibrarian uses the gluetun-shared providers but the LL API itself is on host network — verify before writing anything to LL.
+- CWNG's HTTP API turns out to be too thin to cover the shelf operations and you'd need to write through CWNG's SQLite from a process that doesn't co-locate with it. The operator may want to add the HTTP API to CWNG first; ask.
+- A credential you can't infer from the homelab-API-keys memory + the SSH read paths.
+- Push access to `github.com/new-usemame/arr-stack-mcp`, the new `github.com/new-usemame/book-stack-mcp`, or `gh auth` for `new-usemame` fails. For the second repo you'll need to `gh repo create new-usemame/book-stack-mcp --public --description ...` first.
+- PyPI trusted-publisher setup needed for `book-stack-mcp` (the operator's already done it for `arr-stack-mcp`; the second project needs its own publisher registered at `https://pypi.org/manage/account/publishing/`). This is operator-only.
 - A license or product-policy decision only the operator can make.
 - ibis-bot is mid-conversation with Maggie or Alex when you'd otherwise redeploy. Wait. The bot's logs make this visible.
 
