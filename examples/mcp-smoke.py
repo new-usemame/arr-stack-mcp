@@ -93,57 +93,56 @@ async def run() -> None:
 
     transcript: list[dict[str, object]] = []
 
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            init = await session.initialize()
-            print(f"   server: {init.serverInfo.name} {init.serverInfo.version}")
-            transcript.append(
-                {
-                    "step": "initialize",
-                    "serverInfo": {
-                        "name": init.serverInfo.name,
-                        "version": init.serverInfo.version,
-                    },
-                    "protocolVersion": init.protocolVersion,
-                }
-            )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        init = await session.initialize()
+        print(f"   server: {init.serverInfo.name} {init.serverInfo.version}")
+        transcript.append(
+            {
+                "step": "initialize",
+                "serverInfo": {
+                    "name": init.serverInfo.name,
+                    "version": init.serverInfo.version,
+                },
+                "protocolVersion": init.protocolVersion,
+            }
+        )
 
-            listing = await session.list_tools()
-            names = [t.name for t in listing.tools]
-            print(f"-> tools/list: {len(names)} tools advertised")
-            transcript.append({"step": "tools/list", "tool_count": len(names), "names": names})
+        listing = await session.list_tools()
+        names = [t.name for t in listing.tools]
+        print(f"-> tools/list: {len(names)} tools advertised")
+        transcript.append({"step": "tools/list", "tool_count": len(names), "names": names})
 
-            for name, args in CALLS:
-                print(f"-> tools/call {name}")
-                try:
-                    result = await session.call_tool(name, arguments=args)
-                    payload = [
-                        c.model_dump(mode="json") if hasattr(c, "model_dump") else str(c)
-                        for c in result.content
-                    ]
-                    if result.isError:
-                        print(f"   x {payload!r}")
-                    else:
-                        print(f"   ok ({sum(len(json.dumps(p, default=str)) for p in payload)} bytes)")
-                    transcript.append(
-                        {
-                            "step": "tools/call",
-                            "tool": name,
-                            "args": args,
-                            "isError": result.isError,
-                            "content": payload,
-                        }
-                    )
-                except Exception as e:
-                    print(f"   x exception: {e}")
-                    transcript.append(
-                        {
-                            "step": "tools/call",
-                            "tool": name,
-                            "args": args,
-                            "exception": repr(e),
-                        }
-                    )
+        for name, args in CALLS:
+            print(f"-> tools/call {name}")
+            try:
+                result = await session.call_tool(name, arguments=args)
+                payload = [
+                    c.model_dump(mode="json") if hasattr(c, "model_dump") else str(c)
+                    for c in result.content
+                ]
+                if result.isError:
+                    print(f"   x {payload!r}")
+                else:
+                    print(f"   ok ({sum(len(json.dumps(p, default=str)) for p in payload)} bytes)")
+                transcript.append(
+                    {
+                        "step": "tools/call",
+                        "tool": name,
+                        "args": args,
+                        "isError": result.isError,
+                        "content": payload,
+                    }
+                )
+            except Exception as e:
+                print(f"   x exception: {e}")
+                transcript.append(
+                    {
+                        "step": "tools/call",
+                        "tool": name,
+                        "args": args,
+                        "exception": repr(e),
+                    }
+                )
 
     OUT_PATH.write_text(json.dumps(transcript, indent=2, default=str) + "\n")
     print(f"\nwrote transcript -> {OUT_PATH}")

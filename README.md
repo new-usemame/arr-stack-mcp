@@ -128,9 +128,36 @@ services:
 |---|---|---|
 | `--read-only` | `ARRSTACK_READ_ONLY=true` | Skip every tool tagged `write` or `destructive` at registration. |
 | `--disable-destructive` | `ARRSTACK_DISABLE_DESTRUCTIVE=true` | Skip only the `destructive` tools (deletes). |
+| `--dry-run` | — | Plan-and-record mode (v0.2). Write/destructive tools short-circuit before the upstream mutation and log the intended payload to a ring buffer surfaced by `stack.dryrun_log`. Reads run normally. |
 | `--transport stdio` | — | Default. Use for Claude Desktop and Claude Code. |
 | `--transport streamable-http` | — | HTTP transport for n8n / remote consumers. |
+| `--bearer-token-env ARR_STACK_MCP_BEARER_TOKEN` | (env name) | Env var the server reads the bearer token from. Streamable-HTTP on a non-loopback bind refuses to start when this env var is unset. |
 | `--config path/to/config.yaml` | — | Override config path. Defaults to `./arr-stack-mcp.yaml`, then XDG. |
+
+### Confirm-token persistence (v0.2)
+
+Confirm tokens default to in-memory storage. Set `policy.state_db_path` in the config to persist tokens across server restarts and across streamable-HTTP request lifetimes:
+
+```yaml
+policy:
+  state_db_path: ~/.local/state/arr-stack-mcp/state.db
+```
+
+The path is created idempotently. SQLite WAL mode lets multiple worker processes share the same DB safely.
+
+### Hourly per-tool call cap (v0.2)
+
+Opt-in runaway-agent protection. Tools without an entry are uncapped:
+
+```yaml
+policy:
+  hourly_caps:
+    sonarr.series_add: 50
+    radarr.movie_add: 50
+    sonarr.series_delete: 10
+```
+
+Per-process, per-tool, rolling-hour. Failed upstream calls still consume budget so a runaway loop hits the cap on the Nth attempt.
 
 ## Capability matrix
 
@@ -143,6 +170,7 @@ Tools follow the `<service>.<verb_object>` convention. Tags drive flag-based gat
 | `sonarr.system_status` | read | Version + branch + uptime. First call when diagnosing. |
 | `sonarr.series_search` | read | Search the existing library (already-added). |
 | `sonarr.series_lookup` | read | Search TVDB to discover series to add. |
+| `sonarr.series_status` | read | Per-season breakdown (v0.2). Episode counts, files on disk, missing. |
 | `sonarr.queue` | read | Active downloads with progress. |
 | `sonarr.calendar` | read | Upcoming + recently-aired episodes. |
 | `sonarr.missing` | read | Monitored episodes not on disk. |
@@ -179,10 +207,33 @@ Tools follow the `<service>.<verb_object>` convention. Tags drive flag-based gat
 | Tool | Tag | Use |
 |---|---|---|
 | `jellyfin.system_info` | read | Version + server name. Public endpoint. |
-| `jellyfin.library_search` | read | Search items by name across libraries. |
-| `jellyfin.recent_additions` | read | Newest items by date_added. |
+| `jellyfin.library_search` | read | Search items by name. Pass `user_id=` for per-user scoping (v0.2). |
+| `jellyfin.recent_additions` | read | Newest items by date_added. Pass `user_id=` for per-user scoping (v0.2). |
+| `jellyfin.users_list` | read | Enumerate user accounts (v0.2). Returns `user_id`, name, admin flag, last login. |
 | `jellyfin.now_playing` | read | Currently-active sessions with progress. |
 | `jellyfin.scan_library` | write | Trigger a library refresh. |
+
+### Prowlarr (v0.2)
+
+| Tool | Tag | Use |
+|---|---|---|
+| `prowlarr.system_status` | read | Version + branch. First call when diagnosing Prowlarr. |
+| `prowlarr.health` | read | Health-check issues (warnings, errors, wiki links). |
+| `prowlarr.indexer_list` | read | Configured indexers with implementation, protocol, priority, enable. |
+| `prowlarr.indexer_stats` | read | Query / grab / failure counts per indexer + average response time. |
+| `prowlarr.indexer_status` | read | Currently-failing indexers with retry-after timestamps. |
+| `prowlarr.indexer_test_all` | write | Trigger the test-every-indexer probe; returns per-indexer pass/fail. |
+| `prowlarr.search` | read | Search across configured indexers. Returns title, indexer, size, age, seeders. Does NOT download — use `*.add` on Sonarr / Radarr / Lidarr with catalog id. |
+
+### stack.* (v0.2, cross-service)
+
+| Tool | Tag | Use |
+|---|---|---|
+| `stack.health` | read | Probe every enabled service's `*.system_status` in parallel. Returns reachability matrix + `overall_ok`. |
+| `stack.dryrun_log` | read | Read the ring buffer of would-have-fired mutations recorded under `--dry-run`. |
+| `stack.report_issue` | read | Compose a pre-filled GitHub issue URL the user can post upstream. Never auto-submits. |
+| `stack.find_anywhere` | read | Fan a query across every enabled arr + Jellyfin library; merged result with `source` per row. |
+| `stack.queue_status_all` | read | Aggregate download queue across Sonarr, Radarr, Lidarr. Normalized row shape. |
 
 ## Confirm-token flow
 

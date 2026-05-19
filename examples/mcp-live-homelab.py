@@ -51,6 +51,11 @@ services:
     url: https://teenyverse.lan:8686
     api_key: ${LIDARR_API_KEY}
     verify_tls: false
+  prowlarr:
+    enabled: true
+    url: https://teenyverse.lan:9696
+    api_key: ${PROWLARR_API_KEY}
+    verify_tls: false
   jellyfin:
     enabled: true
     url: http://transcoder.lan:8096
@@ -58,16 +63,34 @@ services:
 """
 
 # Read-only-only call set. No *_add, no *_delete, no scan_library.
+# v0.2 additions woven in alongside the v0.1 baseline.
 CALLS: list[tuple[str, dict[str, object]]] = [
+    # System status across every service — establishes baseline reachability.
     ("sonarr.system_status", {}),
     ("radarr.system_status", {}),
     ("lidarr.system_status", {}),
+    ("prowlarr.system_status", {}),
     ("jellyfin.system_info", {}),
+    # v0.2 cross-service aggregator — exercises stack.health concurrently.
+    ("stack.health", {"args": {}}),
+    # v0.2 Jellyfin user catalog — needed for ibis-bot migration prep.
+    ("jellyfin.users_list", {"args": {}}),
+    # Per-service search (v0.1 surface).
     ("sonarr.series_search", {"args": {"query": "the", "limit": 5}}),
     ("radarr.movie_search", {"args": {"query": "dune", "limit": 5}}),
     ("lidarr.artist_search", {"args": {"query": "the", "limit": 5}}),
+    # v0.2 cross-service find_anywhere — exercises the fan-out path.
+    ("stack.find_anywhere", {"args": {"query": "dune", "limit_per_service": 3}}),
+    # Queue snapshot (v0.1 per-service + v0.2 aggregated).
     ("sonarr.queue", {"args": {"limit": 10}}),
     ("radarr.queue", {"args": {"limit": 10}}),
+    ("stack.queue_status_all", {"args": {"limit_per_service": 10}}),
+    # v0.2 Prowlarr diagnostic chain — health + indexer status.
+    ("prowlarr.health", {}),
+    ("prowlarr.indexer_list", {"args": {"enabled_only": True}}),
+    ("prowlarr.indexer_stats", {}),
+    ("prowlarr.indexer_status", {}),
+    # v0.1 calendar (still in v0.2).
     ("sonarr.calendar", {"args": {"days_back": 3, "days_forward": 7}}),
 ]
 
@@ -77,6 +100,7 @@ def ping_live() -> bool:
         ("sonarr",   "https://teenyverse.lan:8989/ping",  os.environ.get("SONARR_API_KEY", "")),
         ("radarr",   "https://teenyverse.lan:7878/ping",  os.environ.get("RADARR_API_KEY", "")),
         ("lidarr",   "https://teenyverse.lan:8686/ping",  os.environ.get("LIDARR_API_KEY", "")),
+        ("prowlarr", "https://teenyverse.lan:9696/ping",  os.environ.get("PROWLARR_API_KEY", "")),
         ("jellyfin", "http://transcoder.lan:8096/System/Info/Public", None),
     ]
     for name, url, key in targets:
@@ -94,7 +118,7 @@ def ping_live() -> bool:
 
 
 async def run() -> None:
-    required = ["SONARR_API_KEY", "RADARR_API_KEY", "LIDARR_API_KEY", "JELLYFIN_API_KEY"]
+    required = ["SONARR_API_KEY", "RADARR_API_KEY", "LIDARR_API_KEY", "PROWLARR_API_KEY", "JELLYFIN_API_KEY"]
     missing = [k for k in required if not os.environ.get(k)]
     if missing:
         print(f"missing env vars: {missing}", file=sys.stderr)
@@ -108,7 +132,7 @@ async def run() -> None:
         f.write(CONFIG_YAML_TMPL)
         cfg = f.name
 
-    print(f"-> spawning arr-stack-mcp serve --transport stdio (READ-ONLY against live homelab)")
+    print("-> spawning arr-stack-mcp serve --transport stdio (READ-ONLY against live homelab)")
     params = StdioServerParameters(
         command="uv",
         args=["run", "arr-stack-mcp", "serve", "--transport", "stdio", "--config", cfg],
@@ -118,51 +142,50 @@ async def run() -> None:
 
     transcript: list[dict[str, object]] = []
 
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            init = await session.initialize()
-            print(f"   server: {init.serverInfo.name} {init.serverInfo.version}")
-            transcript.append(
-                {
-                    "step": "initialize",
-                    "serverInfo": {
-                        "name": init.serverInfo.name,
-                        "version": init.serverInfo.version,
-                    },
-                    "protocolVersion": init.protocolVersion,
-                }
-            )
+    async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+        init = await session.initialize()
+        print(f"   server: {init.serverInfo.name} {init.serverInfo.version}")
+        transcript.append(
+            {
+                "step": "initialize",
+                "serverInfo": {
+                    "name": init.serverInfo.name,
+                    "version": init.serverInfo.version,
+                },
+                "protocolVersion": init.protocolVersion,
+            }
+        )
 
-            listing = await session.list_tools()
-            names = [t.name for t in listing.tools]
-            print(f"-> tools/list: {len(names)} tools advertised (read-only filter applied)")
-            transcript.append({"step": "tools/list", "tool_count": len(names), "names": names})
+        listing = await session.list_tools()
+        names = [t.name for t in listing.tools]
+        print(f"-> tools/list: {len(names)} tools advertised (read-only filter applied)")
+        transcript.append({"step": "tools/list", "tool_count": len(names), "names": names})
 
-            for name, args in CALLS:
-                print(f"-> tools/call {name}")
-                try:
-                    result = await session.call_tool(name, arguments=args)
-                    payload = [
-                        c.model_dump(mode="json") if hasattr(c, "model_dump") else str(c)
-                        for c in result.content
-                    ]
-                    status = "x" if result.isError else "ok"
-                    size = sum(len(json.dumps(p, default=str)) for p in payload)
-                    print(f"   {status} ({size} bytes)")
-                    transcript.append(
-                        {
-                            "step": "tools/call",
-                            "tool": name,
-                            "args": args,
-                            "isError": result.isError,
-                            "content": payload,
-                        }
-                    )
-                except Exception as e:
-                    print(f"   x exception: {e}")
-                    transcript.append(
-                        {"step": "tools/call", "tool": name, "args": args, "exception": repr(e)}
-                    )
+        for name, args in CALLS:
+            print(f"-> tools/call {name}")
+            try:
+                result = await session.call_tool(name, arguments=args)
+                payload = [
+                    c.model_dump(mode="json") if hasattr(c, "model_dump") else str(c)
+                    for c in result.content
+                ]
+                status = "x" if result.isError else "ok"
+                size = sum(len(json.dumps(p, default=str)) for p in payload)
+                print(f"   {status} ({size} bytes)")
+                transcript.append(
+                    {
+                        "step": "tools/call",
+                        "tool": name,
+                        "args": args,
+                        "isError": result.isError,
+                        "content": payload,
+                    }
+                )
+            except Exception as e:
+                print(f"   x exception: {e}")
+                transcript.append(
+                    {"step": "tools/call", "tool": name, "args": args, "exception": repr(e)}
+                )
 
     OUT_PATH.write_text(json.dumps(transcript, indent=2, default=str) + "\n")
     print(f"\nwrote transcript -> {OUT_PATH}")
