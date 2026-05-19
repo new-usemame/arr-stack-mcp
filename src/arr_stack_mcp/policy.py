@@ -35,6 +35,13 @@ class PolicyConfig(BaseModel):
     dry_run: bool = False
     confirm_token_ttl_seconds: int = Field(default=300, ge=10, le=3600)
     require_confirm_for_destructive: bool = True
+    # Per-tool, per-hour call cap. Off by default — entries are opt-in. Catches
+    # runaway-agent loops (a misbehaving consumer hitting one tool 1000x in
+    # five minutes). Per-process; not per-user. The bot-side per-user-per-day
+    # caps in ibis-bot live at the bot layer and stay there. Each entry maps a
+    # tool name (e.g. "sonarr.series_add") to the maximum number of calls in
+    # any rolling hour-window. See notes/DESIGN-v0.2.md §1.4.
+    hourly_caps: dict[str, int] = Field(default_factory=dict)
 
 
 @dataclass
@@ -47,17 +54,20 @@ class _PendingToken:
 
 @dataclass
 class Policy:
-    """Live policy enforcement. Owns the confirm-token cache + dry-run ring buffer."""
+    """Live policy enforcement. Owns the confirm-token cache + dry-run ring buffer + hourly cap counters."""
 
     read_only: bool
     disable_destructive: bool
     dry_run: bool
     require_confirm_for_destructive: bool
     confirm_token_ttl_seconds: int
+    hourly_caps: dict[str, int] = field(default_factory=dict)
     _tokens: dict[str, _PendingToken] = field(default_factory=dict)
     # Bounded ring buffer of recorded would-have-fired mutations. Surfaced via
     # the `stack.dryrun_log` tool. Per-process; not persisted.
     _dryrun_log: deque[dict[str, object]] = field(default_factory=lambda: deque(maxlen=DRYRUN_LOG_CAPACITY))
+    # (epoch_hour, tool_name) -> call count this hour. Per-process; not persisted.
+    _hourly_counters: dict[tuple[int, str], int] = field(default_factory=dict)
 
     @classmethod
     def from_config(cls, cfg: PolicyConfig, *, read_only: bool, disable_destructive: bool, dry_run: bool = False) -> Self:
@@ -67,6 +77,7 @@ class Policy:
             dry_run=dry_run or cfg.dry_run,
             require_confirm_for_destructive=cfg.require_confirm_for_destructive,
             confirm_token_ttl_seconds=cfg.confirm_token_ttl_seconds,
+            hourly_caps=dict(cfg.hourly_caps),
         )
 
     # --- dry-run ring buffer ------------------------------------------------
@@ -102,7 +113,18 @@ class Policy:
         self._dryrun_log.clear()
 
     def check(self, tool_name: str, tag: Tag) -> None:
-        """Raise PolicyDenied if the active flags block this tool. Called at the top of every tool implementation."""
+        """Raise PolicyDenied if any active gate blocks this tool. Called at the top of every tool implementation.
+
+        Gate order (each raises PolicyDenied on miss):
+          1. read-only mode (rejects WRITE + DESTRUCTIVE)
+          2. disable-destructive mode (rejects DESTRUCTIVE)
+          3. hourly cap (rejects any tool that has exhausted its rolling hour budget)
+
+        Every call that passes all three gates is counted toward the hourly
+        cap, so failed upstream calls still consume budget (intentional — a
+        runaway agent retrying a failing call should hit the cap on the
+        Nth attempt rather than burning the budget unaccounted).
+        """
         if tag in {Tag.WRITE, Tag.DESTRUCTIVE} and self.read_only:
             raise PolicyDenied(
                 tool=tool_name,
@@ -115,6 +137,42 @@ class Policy:
                 reason="server started with --disable-destructive; this tool would delete data",
                 hint="restart without --disable-destructive, or use the non-destructive equivalent",
             )
+        self._check_and_count_hourly(tool_name)
+
+    def _check_and_count_hourly(self, tool_name: str) -> None:
+        """Enforce the per-tool hourly cap and increment the counter.
+
+        Uncapped tools (no entry or entry <= 0 in ``hourly_caps``) are passed
+        through without bookkeeping. For capped tools, the current epoch hour
+        is the rollover boundary — a call at HH:59 and a call at HH+1:00 are
+        in different buckets.
+
+        Older buckets are swept opportunistically (drops counters from before
+        the previous hour) to keep the dict bounded.
+        """
+        cap = self.hourly_caps.get(tool_name, 0)
+        if cap <= 0:
+            return
+        hour = int(time.time() // 3600)
+        self._sweep_hourly(hour)
+        key = (hour, tool_name)
+        count = self._hourly_counters.get(key, 0)
+        if count >= cap:
+            raise PolicyDenied(
+                tool=tool_name,
+                reason=f"hourly cap reached: {tool_name} has fired {count} times this hour (cap {cap})",
+                hint=(
+                    "wait for the hour boundary, raise the cap in `policy.hourly_caps`, "
+                    "or remove the cap entry to disable it for this tool"
+                ),
+            )
+        self._hourly_counters[key] = count + 1
+
+    def _sweep_hourly(self, current_hour: int) -> None:
+        """Drop hourly-counter buckets older than the previous hour. Cheap; bounded by tool count."""
+        stale = [k for k in self._hourly_counters if k[0] < current_hour - 1]
+        for k in stale:
+            self._hourly_counters.pop(k, None)
 
     def issue_token(self, tool_name: str, payload_fingerprint: str) -> str:
         """Issue a single-use, time-limited confirm token.
