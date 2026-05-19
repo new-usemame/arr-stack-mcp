@@ -1,14 +1,22 @@
-"""Shared HTTP client construction + error translation.
+"""Shared HTTP error-translation helpers.
 
-Wraps the generated thin clients so every per-service tool can rely on a
-common error envelope. Generated httpx errors get mapped to our diagnostic
-ToolError subclasses with hints the agent can act on.
+This module hosts the diagnostic-envelope translation we apply when generated-
+client HTTP calls fail. It does NOT own httpx-client construction — each
+per-service `_client.py` builds its own `Client(...)` via the openapi-python-
+client constructor, which internally owns the bound `httpx.AsyncClient`. The
+earlier `build_httpx_client` helper was unreferenced and has been removed; see
+notes/DESIGN-v0.2.md §1.8.
+
+Wiring `upstream_call` into the per-service tool functions (so raw httpx errors
+surface as our diagnostic envelopes rather than bubbling up) is a real v0.2
+quality improvement tracked separately from this cleanup. Today the helpers
+exist as documented intent.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -16,39 +24,6 @@ from arr_stack_mcp.errors import UpstreamAuthFailed, UpstreamBadRequest, Upstrea
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
-
-    from arr_stack_mcp.config import ServiceConfig
-
-
-_ARR_HEADER = "X-Api-Key"
-_JELLYFIN_AUTH_TEMPLATE = 'MediaBrowser Client="arr-stack-mcp", Device="server", DeviceId="arr-stack-mcp", Version="0.1.0", Token="{token}"'
-
-ClientT = TypeVar("ClientT")
-
-
-def build_httpx_client(svc: ServiceConfig) -> httpx.AsyncClient:
-    """Construct the httpx.AsyncClient the generated client will use.
-
-    Sets timeout, TLS verification, and the right auth header for each service
-    family. The generated openapi-python-client `Client` / `AuthenticatedClient`
-    accepts an httpx-client factory through ``.set_async_httpx_client(...)``.
-    """
-    headers: dict[str, str] = {}
-    if svc.api_key is not None:
-        key = svc.api_key.get_secret_value()
-        match svc.name:
-            case "jellyfin":
-                headers["Authorization"] = _JELLYFIN_AUTH_TEMPLATE.format(token=key)
-                headers["X-Emby-Token"] = key
-            case _:
-                headers[_ARR_HEADER] = key
-    return httpx.AsyncClient(
-        base_url=str(svc.url).rstrip("/"),
-        timeout=httpx.Timeout(svc.timeout_seconds),
-        verify=svc.verify_tls,
-        headers=headers,
-        follow_redirects=False,
-    )
 
 
 @asynccontextmanager
