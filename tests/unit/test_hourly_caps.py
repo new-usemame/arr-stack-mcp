@@ -28,7 +28,7 @@ def test_uncapped_tool_passes_through() -> None:
     for _ in range(100):
         p.check("sonarr.series_search", Tag.READ)
     # No exception; no recorded counter for uncapped tools (zero in dict).
-    assert p._hourly_counters == {}  # type: ignore[reportPrivateUsage]
+    assert p._hourly_counters == {}
 
 
 def test_cap_blocks_after_n_calls() -> None:
@@ -90,14 +90,14 @@ def test_sweep_drops_old_hour_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
     base = 1_700_000_000
     monkeypatch.setattr("arr_stack_mcp.policy.time.time", lambda: float(base))
     p.check("x.add", Tag.WRITE)
-    assert len(p._hourly_counters) == 1  # type: ignore[reportPrivateUsage]
+    assert len(p._hourly_counters) == 1
 
     # Hour H+5 — earlier bucket should be swept on the next check.
     monkeypatch.setattr("arr_stack_mcp.policy.time.time", lambda: float(base + 5 * 3600))
     p.check("x.add", Tag.WRITE)
     # Only the current hour remains (previous-hour retention covers H+4 only,
     # which had no traffic; H got swept).
-    assert len(p._hourly_counters) == 1  # type: ignore[reportPrivateUsage]
+    assert len(p._hourly_counters) == 1
 
 
 def test_failed_call_still_counts_against_cap() -> None:
@@ -126,7 +126,7 @@ def test_cap_evaluated_after_flag_gates() -> None:
     import time as _t
 
     hour = int(_t.time() // 3600)
-    assert p._hourly_counters.get((hour, "x.add"), 0) == 0  # type: ignore[reportPrivateUsage]
+    assert p._hourly_counters.get((hour, "x.add"), 0) == 0
 
 
 def test_caps_dict_is_copied_not_shared() -> None:

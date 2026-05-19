@@ -141,4 +141,7 @@ def test_short_circuit_records_each_call_separately() -> None:
         assert out is env
     log = p.dryrun_log()
     assert [e["tool_name"] for e in log] == ["tool.0", "tool.1", "tool.2"]
-    assert [e["payload"]["i"] for e in log] == [0, 1, 2]
+    payloads = [e["payload"] for e in log]
+    for p_ in payloads:
+        assert isinstance(p_, dict)
+    assert [p_["i"] for p_ in payloads if isinstance(p_, dict)] == [0, 1, 2]

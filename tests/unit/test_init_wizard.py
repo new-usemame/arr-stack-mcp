@@ -15,7 +15,7 @@ Tests mock the httpx call to control which combinations "respond."
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any
 
@@ -78,7 +78,7 @@ def test_probe_generic_hosts_is_tuple() -> None:
 
 
 @contextmanager
-def _patch_get(monkeypatch: pytest.MonkeyPatch, status_codes_by_url: dict[str, int | type[Exception]]) -> Iterator[None]:
+def _patch_get(monkeypatch: pytest.MonkeyPatch, status_codes_by_url: Mapping[str, int | type[Exception]]) -> Iterator[None]:
     """Patch httpx.AsyncClient.get to return synthetic responses per URL."""
 
     class _FakeResp:

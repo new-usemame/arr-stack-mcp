@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import urllib.parse
+from typing import Any
 
 from arr_stack_mcp.config import Config
 from arr_stack_mcp.policy import Policy, PolicyConfig
@@ -36,8 +37,12 @@ class _StubMCP:
     def __init__(self) -> None:
         self.handlers: dict[str, object] = {}
 
-    def tool(self, *, name: str, description: str):
-        def _decorator(fn):
+    def tool(self, *, name: str, description: str) -> Any:
+        # `description` is unused here — we mirror FastMCP's tool() signature
+        # for fidelity, but only capture the handler so tests can call it.
+        del description
+
+        def _decorator(fn: Any) -> Any:
             self.handlers[name] = fn
             return fn
 

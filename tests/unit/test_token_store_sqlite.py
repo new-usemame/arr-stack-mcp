@@ -33,14 +33,14 @@ from arr_stack_mcp.policy import (
 def test_from_config_no_path_uses_in_memory(tmp_path: Path) -> None:
     cfg = PolicyConfig(state_db_path=None)
     p = Policy.from_config(cfg, read_only=False, disable_destructive=False)
-    assert isinstance(p._token_store, _InMemoryTokenStore)  # type: ignore[reportPrivateUsage]
+    assert isinstance(p._token_store, _InMemoryTokenStore)
 
 
 def test_from_config_with_path_uses_sqlite(tmp_path: Path) -> None:
     db = tmp_path / "state.db"
     cfg = PolicyConfig(state_db_path=str(db))
     p = Policy.from_config(cfg, read_only=False, disable_destructive=False)
-    assert isinstance(p._token_store, _SQLiteTokenStore)  # type: ignore[reportPrivateUsage]
+    assert isinstance(p._token_store, _SQLiteTokenStore)
     assert db.exists()
 
 
@@ -48,7 +48,7 @@ def test_from_config_with_empty_string_uses_in_memory(tmp_path: Path) -> None:
     """`state_db_path: ""` shouldn't try to create a SQLite file at the empty path."""
     cfg = PolicyConfig(state_db_path="")
     p = Policy.from_config(cfg, read_only=False, disable_destructive=False)
-    assert isinstance(p._token_store, _InMemoryTokenStore)  # type: ignore[reportPrivateUsage]
+    assert isinstance(p._token_store, _InMemoryTokenStore)
 
 
 # ---------- schema ----------
