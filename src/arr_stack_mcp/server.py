@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import TYPE_CHECKING
 
 import structlog
@@ -15,6 +16,24 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 log = structlog.get_logger(__name__)
+
+
+def _configure_logging_for_transport(transport: str) -> None:
+    """Pipe structlog to stderr in stdio mode so logs don't corrupt the JSON-RPC channel.
+
+    The MCP spec reserves stdout on stdio transport for JSON-RPC frames. structlog's
+    default PrintLoggerFactory writes to stdout; without this, every `log.info(...)`
+    call here emits a line the client must reject as malformed JSON. Streamable-HTTP
+    transports keep stderr too — both fds remain free of protocol traffic.
+    """
+    # reset_defaults() clears any cached bound loggers so module-level
+    # `log = structlog.get_logger(__name__)` calls bound during import re-bind
+    # against the stderr factory on next use.
+    structlog.reset_defaults()
+    structlog.configure(
+        logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
+        cache_logger_on_first_use=True,
+    )
 
 
 class BearerRequired(RuntimeError):
@@ -37,6 +56,7 @@ def run(
     bearer_token_env: str = DEFAULT_BEARER_TOKEN_ENV,
 ) -> None:
     """Boot the MCP server. Pure orchestration; the per-service registration lives in arr_stack_mcp.tools.*."""
+    _configure_logging_for_transport(transport)
     cfg = load_config(config_path)
     policy = Policy.from_config(
         cfg.policy,
