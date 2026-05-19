@@ -139,7 +139,8 @@ def register_all(mcp: FastMCP, cfg: Config, policy: Policy) -> None:
             "before drilling into any one service. Read-only."
         ),
     )
-    async def stack_health(_args: StackHealthInput) -> StackHealthResult:
+    async def stack_health(args: StackHealthInput) -> StackHealthResult:
+        del args  # FastMCP rejects underscore-prefixed param names; the input is empty by design.
         policy.check("stack.health", Tag.READ)
         rows = await _gather_health(cfg)
         overall = all(r.reachable and r.version is not None for r in rows if r.enabled)

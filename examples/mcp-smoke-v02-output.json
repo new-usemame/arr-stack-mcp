@@ -1,0 +1,236 @@
+[
+  {
+    "step": "initialize",
+    "serverInfo": {
+      "name": "arr-stack-mcp",
+      "version": "1.27.1"
+    },
+    "protocolVersion": "2025-11-25",
+    "instructions_length": 3342
+  },
+  {
+    "step": "tools/list",
+    "tool_count": 36,
+    "names": [
+      "lidarr.artist_add",
+      "lidarr.artist_albums",
+      "lidarr.artist_delete",
+      "lidarr.artist_lookup",
+      "lidarr.artist_search",
+      "lidarr.queue",
+      "lidarr.system_status",
+      "prowlarr.health",
+      "prowlarr.indexer_list",
+      "prowlarr.indexer_stats",
+      "prowlarr.indexer_status",
+      "prowlarr.indexer_test_all",
+      "prowlarr.search",
+      "prowlarr.system_status",
+      "radarr.calendar",
+      "radarr.missing",
+      "radarr.movie_add",
+      "radarr.movie_delete",
+      "radarr.movie_lookup",
+      "radarr.movie_search",
+      "radarr.queue",
+      "radarr.system_status",
+      "sonarr.calendar",
+      "sonarr.missing",
+      "sonarr.queue",
+      "sonarr.series_add",
+      "sonarr.series_delete",
+      "sonarr.series_lookup",
+      "sonarr.series_search",
+      "sonarr.series_status",
+      "sonarr.system_status",
+      "stack.dryrun_log",
+      "stack.find_anywhere",
+      "stack.health",
+      "stack.queue_status_all",
+      "stack.report_issue"
+    ],
+    "v02_missing": [
+      "jellyfin.users_list"
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "stack.health",
+    "args": {
+      "args": {}
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"overall_ok\": true,\n  \"services\": [\n    {\n      \"name\": \"jellyfin\",\n      \"enabled\": false,\n      \"reachable\": false,\n      \"version\": null,\n      \"error\": null\n    },\n    {\n      \"name\": \"lidarr\",\n      \"enabled\": true,\n      \"reachable\": true,\n      \"version\": \"3.1.0.4875\",\n      \"error\": null\n    },\n    {\n      \"name\": \"prowlarr\",\n      \"enabled\": true,\n      \"reachable\": true,\n      \"version\": \"2.3.5.5327\",\n      \"error\": null\n    },\n    {\n      \"name\": \"radarr\",\n      \"enabled\": true,\n      \"reachable\": true,\n      \"version\": \"6.0.4.10291\",\n      \"error\": null\n    },\n    {\n      \"name\": \"sonarr\",\n      \"enabled\": true,\n      \"reachable\": true,\n      \"version\": \"4.0.16.2944\",\n      \"error\": null\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "stack.dryrun_log",
+    "args": {
+      "args": {}
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 0,\n  \"entries\": []\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "stack.find_anywhere",
+    "args": {
+      "args": {
+        "query": "test",
+        "limit_per_service": 3
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"query\": \"test\",\n  \"total_count\": 0,\n  \"sources\": [\n    {\n      \"source\": \"lidarr\",\n      \"count\": 0,\n      \"items\": [],\n      \"error\": null\n    },\n    {\n      \"source\": \"radarr\",\n      \"count\": 0,\n      \"items\": [],\n      \"error\": null\n    },\n    {\n      \"source\": \"sonarr\",\n      \"count\": 0,\n      \"items\": [],\n      \"error\": null\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "stack.queue_status_all",
+    "args": {
+      "args": {
+        "limit_per_service": 5
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"total_count\": 0,\n  \"sources\": [\n    {\n      \"source\": \"lidarr\",\n      \"count\": 0,\n      \"total\": 0,\n      \"items\": [],\n      \"error\": null\n    },\n    {\n      \"source\": \"radarr\",\n      \"count\": 0,\n      \"total\": 0,\n      \"items\": [],\n      \"error\": null\n    },\n    {\n      \"source\": \"sonarr\",\n      \"count\": 0,\n      \"total\": 0,\n      \"items\": [],\n      \"error\": null\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "stack.report_issue",
+    "args": {
+      "args": {
+        "summary": "v0.2 smoke test",
+        "include_dryrun_log": true
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"url\": \"https://github.com/new-usemame/arr-stack-mcp/issues/new?title=v0.2+smoke+test&body=Filed+via+%60stack.report_issue%60+from+arr-stack-mcp.\",\n  \"repo\": \"new-usemame/arr-stack-mcp\"\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "prowlarr.system_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"service\": \"prowlarr\",\n  \"url\": \"http://localhost:19696\",\n  \"status\": {\n    \"version\": \"2.3.5.5327\",\n    \"branch\": \"master\",\n    \"runtime_version\": \"8.0.12\",\n    \"is_production\": true,\n    \"is_admin\": false,\n    \"is_docker\": true,\n    \"start_time\": \"2026-05-19T05:26:16+00:00\",\n    \"instance_name\": \"PROWLARR\"\n  }\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "prowlarr.health",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 1,\n  \"issues\": [\n    {\n      \"source\": \"IndexerCheck\",\n      \"type\": \"error\",\n      \"message\": \"No indexers enabled, Prowlarr will not return search results\",\n      \"wiki_url\": \"https://wiki.servarr.com/prowlarr/system#no-indexers-enabled-prowlarr-will-not-return-search-results\"\n    }\n  ]\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "prowlarr.indexer_list",
+    "args": {
+      "args": {
+        "enabled_only": false
+      }
+    },
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 0,\n  \"items\": []\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "prowlarr.indexer_stats",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 0,\n  \"items\": []\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "prowlarr.indexer_status",
+    "args": {},
+    "isError": false,
+    "content": [
+      {
+        "type": "text",
+        "text": "{\n  \"ok\": true,\n  \"count\": 0,\n  \"items\": []\n}",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  },
+  {
+    "step": "tools/call",
+    "tool": "sonarr.series_status",
+    "args": {
+      "args": {
+        "tvdb_id": 12345
+      }
+    },
+    "isError": true,
+    "content": [
+      {
+        "type": "text",
+        "text": "Error executing tool sonarr.series_status: sonarr: tvdb_id=12345 is not in the library",
+        "annotations": null,
+        "meta": null
+      }
+    ]
+  }
+]

@@ -176,7 +176,8 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
             "working?' diagnostic after configuration changes."
         ),
     )
-    async def prowlarr_indexer_test_all(_args: TestAllInput) -> TestAllResult:
+    async def prowlarr_indexer_test_all(args: TestAllInput) -> TestAllResult:
+        del args  # FastMCP rejects underscore-prefixed param names; the input is empty by design.
         policy.check("prowlarr.indexer_test_all", Tag.WRITE)
         resp = await post_api_v1_indexer_testall.asyncio_detailed(client=client)
         # The endpoint returns a JSON array on 200. The generated thin client
