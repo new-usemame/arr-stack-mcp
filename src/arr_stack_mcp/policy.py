@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import secrets
+import sqlite3
 import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Self
+from pathlib import Path
+from typing import Protocol, Self
 
 from pydantic import BaseModel, Field
 
@@ -42,19 +44,147 @@ class PolicyConfig(BaseModel):
     # tool name (e.g. "sonarr.series_add") to the maximum number of calls in
     # any rolling hour-window. See notes/DESIGN-v0.2.md §1.4.
     hourly_caps: dict[str, int] = Field(default_factory=dict)
+    # Filesystem path for the confirm-token persistence DB. Unset (None) keeps
+    # tokens in-memory (correct for stdio transport where the server lives one
+    # process per session). Set to a path for streamable-HTTP transport, where
+    # tokens must survive across HTTP request lifetimes within a session — and
+    # to let tokens survive a server restart mid-plan. The path is created
+    # idempotently; parent directories are created if missing. See
+    # notes/DESIGN-v0.2.md §1.3.
+    state_db_path: str | None = None
 
 
 @dataclass
 class _PendingToken:
+    """One outstanding confirm token. `expires_at` is a wall-clock unix epoch (so SQLite-backed tokens survive process restart)."""
+
     token: str
     tool_name: str
     expires_at: float
     payload_fingerprint: str
 
 
+class _TokenStore(Protocol):
+    """Backend interface for the confirm-token cache. Two impls: in-memory dict; SQLite file."""
+
+    def put(self, pending: _PendingToken) -> None: ...
+    def pop(self, token: str) -> _PendingToken | None: ...
+    def sweep(self, now_epoch: float) -> None: ...
+
+
+class _InMemoryTokenStore:
+    """Dict-backed token store. Survives one process lifetime only.
+
+    Default for stdio transport (the server lives one process per session, so
+    persistence buys nothing). Tests use this implicitly via PolicyConfig with
+    `state_db_path=None`.
+    """
+
+    def __init__(self) -> None:
+        self._tokens: dict[str, _PendingToken] = {}
+
+    def put(self, pending: _PendingToken) -> None:
+        self._tokens[pending.token] = pending
+
+    def pop(self, token: str) -> _PendingToken | None:
+        return self._tokens.pop(token, None)
+
+    def sweep(self, now_epoch: float) -> None:
+        expired = [t for t, p in self._tokens.items() if p.expires_at < now_epoch]
+        for t in expired:
+            self._tokens.pop(t, None)
+
+
+class _SQLiteTokenStore:
+    """SQLite-backed token store. Survives process restarts; tolerates multi-process writes via WAL.
+
+    Necessary for streamable-HTTP transport, where the server is long-running
+    and tokens issued on one stream must be consumable from another. Also
+    convenient for the operator case of restarting the server mid-plan
+    (the token survives the restart).
+
+    Schema is idempotent (CREATE IF NOT EXISTS). WAL mode is enabled per
+    connection — harmless under stdio, load-bearing under streamable-HTTP if
+    a future deployment runs multiple worker processes against the same DB.
+
+    Sync sqlite3 by design — operations are microseconds; switching to
+    aiosqlite would add a dep with no measurable benefit at this scale.
+    """
+
+    _SCHEMA = """
+        CREATE TABLE IF NOT EXISTS confirm_tokens (
+          token               TEXT PRIMARY KEY,
+          tool_name           TEXT NOT NULL,
+          payload_fingerprint TEXT NOT NULL,
+          expires_at          REAL NOT NULL,
+          created_at          REAL NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_confirm_tokens_expires ON confirm_tokens(expires_at);
+    """
+
+    def __init__(self, db_path: str | Path) -> None:
+        self._db_path = str(db_path)
+        if self._db_path != ":memory:":
+            resolved = Path(self._db_path).expanduser()
+            resolved.parent.mkdir(parents=True, exist_ok=True)
+            self._db_path = str(resolved)
+        with self._connect() as conn:
+            conn.executescript(self._SCHEMA)
+
+    def _connect(self) -> sqlite3.Connection:
+        # `isolation_level=None` puts sqlite in autocommit mode — every write
+        # statement is its own transaction. Combined with WAL, this is the
+        # right shape for short, isolated reads + writes from possibly
+        # concurrent processes.
+        conn = sqlite3.connect(self._db_path, isolation_level=None, timeout=5.0)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
+
+    def put(self, pending: _PendingToken) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                "INSERT INTO confirm_tokens (token, tool_name, payload_fingerprint, expires_at, created_at) VALUES (?, ?, ?, ?, ?)",
+                (
+                    pending.token,
+                    pending.tool_name,
+                    pending.payload_fingerprint,
+                    pending.expires_at,
+                    time.time(),
+                ),
+            )
+
+    def pop(self, token: str) -> _PendingToken | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT token, tool_name, payload_fingerprint, expires_at FROM confirm_tokens WHERE token = ?",
+                (token,),
+            ).fetchone()
+            if row is None:
+                return None
+            conn.execute("DELETE FROM confirm_tokens WHERE token = ?", (token,))
+            return _PendingToken(
+                token=row[0],
+                tool_name=row[1],
+                payload_fingerprint=row[2],
+                expires_at=row[3],
+            )
+
+    def sweep(self, now_epoch: float) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM confirm_tokens WHERE expires_at < ?", (now_epoch,))
+
+
+def _build_token_store(state_db_path: str | None) -> _TokenStore:
+    """Pick the right backend based on the config path. None → in-memory dict; truthy → SQLite."""
+    if not state_db_path:
+        return _InMemoryTokenStore()
+    return _SQLiteTokenStore(state_db_path)
+
+
 @dataclass
 class Policy:
-    """Live policy enforcement. Owns the confirm-token cache + dry-run ring buffer + hourly cap counters."""
+    """Live policy enforcement. Owns the confirm-token store + dry-run ring buffer + hourly cap counters."""
 
     read_only: bool
     disable_destructive: bool
@@ -62,7 +192,11 @@ class Policy:
     require_confirm_for_destructive: bool
     confirm_token_ttl_seconds: int
     hourly_caps: dict[str, int] = field(default_factory=dict)
-    _tokens: dict[str, _PendingToken] = field(default_factory=dict)
+    # Confirm-token storage. In-memory by default; SQLite when `state_db_path`
+    # is set. The backend abstraction makes the persistence choice invisible
+    # to the rest of the codebase — issue_token / consume_token / _sweep
+    # delegate.
+    _token_store: _TokenStore = field(default_factory=_InMemoryTokenStore)
     # Bounded ring buffer of recorded would-have-fired mutations. Surfaced via
     # the `stack.dryrun_log` tool. Per-process; not persisted.
     _dryrun_log: deque[dict[str, object]] = field(default_factory=lambda: deque(maxlen=DRYRUN_LOG_CAPACITY))
@@ -78,6 +212,7 @@ class Policy:
             require_confirm_for_destructive=cfg.require_confirm_for_destructive,
             confirm_token_ttl_seconds=cfg.confirm_token_ttl_seconds,
             hourly_caps=dict(cfg.hourly_caps),
+            _token_store=_build_token_store(cfg.state_db_path),
         )
 
     # --- dry-run ring buffer ------------------------------------------------
@@ -178,28 +313,43 @@ class Policy:
         """Issue a single-use, time-limited confirm token.
 
         Returned to the caller; the caller is expected to invoke the tool a
-        second time with ``confirm_token=<the returned value>``.
+        second time with ``confirm_token=<the returned value>``. Uses
+        wall-clock time so SQLite-backed tokens remain meaningful after a
+        process restart.
         """
         self._sweep()
         token = secrets.token_urlsafe(16)
-        self._tokens[token] = _PendingToken(
-            token=token,
-            tool_name=tool_name,
-            expires_at=time.monotonic() + self.confirm_token_ttl_seconds,
-            payload_fingerprint=payload_fingerprint,
+        self._token_store.put(
+            _PendingToken(
+                token=token,
+                tool_name=tool_name,
+                expires_at=time.time() + self.confirm_token_ttl_seconds,
+                payload_fingerprint=payload_fingerprint,
+            )
         )
         return token
 
     def consume_token(self, tool_name: str, payload_fingerprint: str, confirm_token: str | None) -> None:
-        """Consume a confirm token. Raises ConfirmRequired if absent, mismatched, or expired."""
+        """Consume a confirm token. Raises ConfirmRequired if absent, mismatched, or expired.
+
+        Expiry is checked against the wall-clock; an expired token is
+        consumed (popped) and rejected, so a follow-up retry sees the same
+        "unknown / already used / expired" path as a never-issued token.
+        """
         self._sweep()
         if confirm_token is None:
             raise ConfirmRequired(tool=tool_name)
-        pending = self._tokens.pop(confirm_token, None)
+        pending = self._token_store.pop(confirm_token)
         if pending is None:
             raise ConfirmRequired(
                 tool=tool_name,
                 reason="confirm token unknown, already used, or expired",
+            )
+        if pending.expires_at < time.time():
+            # Sweep may have missed this row if another process raced. Treat as expired.
+            raise ConfirmRequired(
+                tool=tool_name,
+                reason="confirm token expired",
             )
         if pending.tool_name != tool_name:
             raise ConfirmRequired(
@@ -213,11 +363,8 @@ class Policy:
             )
 
     def _sweep(self) -> None:
-        """Drop tokens past their TTL. Called inside every issue/consume to keep the cache bounded."""
-        now = time.monotonic()
-        expired = [t for t, p in self._tokens.items() if p.expires_at < now]
-        for t in expired:
-            self._tokens.pop(t, None)
+        """Drop tokens past their TTL. Called inside every issue/consume to keep the store bounded."""
+        self._token_store.sweep(time.time())
 
 
 def fingerprint(payload: object) -> str:

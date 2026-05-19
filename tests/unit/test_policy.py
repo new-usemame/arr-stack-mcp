@@ -96,10 +96,11 @@ def test_confirm_token_expires(monkeypatch: pytest.MonkeyPatch) -> None:
     fp = fingerprint({})
     token = p.issue_token("sonarr.series_delete", fp)
 
-    # Fast-forward the monotonic clock past the TTL by patching the function
-    # the policy module captured at import.
-    real_time = _time_mod.monotonic()
-    monkeypatch.setattr("arr_stack_mcp.policy.time.monotonic", lambda: real_time + 30)
+    # Fast-forward the wall clock past the TTL. The token store uses
+    # `time.time()` (epoch seconds) so SQLite-backed tokens stay meaningful
+    # across process restarts; tests patch the same function.
+    real_time = _time_mod.time()
+    monkeypatch.setattr("arr_stack_mcp.policy.time.time", lambda: real_time + 30)
 
     with pytest.raises(ConfirmRequired) as exc:
         p.consume_token("sonarr.series_delete", fp, token)
