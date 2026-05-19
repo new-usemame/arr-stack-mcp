@@ -1,6 +1,6 @@
 [project]
 name = "arr-stack-mcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "MCP server giving any MCP-capable agent a clean, intelligent, unified interface to Sonarr, Radarr, Lidarr, Prowlarr, and Jellyfin."
 readme = "README.md"
 requires-python = ">=3.12"
