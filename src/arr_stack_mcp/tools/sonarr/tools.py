@@ -51,10 +51,13 @@ from arr_stack_mcp.tools.sonarr._models import (
     QueueItem,
     QueueResult,
     SearchResult,
+    SeasonSummary,
     SeriesAddInput,
     SeriesDeleteInput,
     SeriesLookupInput,
     SeriesSearchInput,
+    SeriesStatusInput,
+    SeriesStatusResult,
     SeriesSummary,
     StatusResult,
     SystemStatus,
@@ -231,6 +234,26 @@ def register_all(mcp: FastMCP, svc: ServiceConfig, policy: Policy) -> None:
         return CalendarResult(count=len(items), items=items)
 
     @mcp.tool(
+        name="sonarr.series_status",
+        description=(
+            "Per-season breakdown for one series. Returns monitor state, episode count, episode-files-on-disk "
+            "count, and bytes-on-disk for every season, plus series-level totals. Use this BEFORE saying "
+            "'I can't check that level of detail' — it can. Use when the user asks 'what seasons does X have?', "
+            "'is X complete?', 'how many episodes of X do we have?', 'what's missing from X?'. Either "
+            "`sonarr_id` (from a prior search/lookup) or `tvdb_id` resolves the series."
+        ),
+    )
+    async def sonarr_series_status(args: SeriesStatusInput) -> SeriesStatusResult:
+        policy.check("sonarr.series_status", Tag.READ)
+        if args.sonarr_id is None and args.tvdb_id is None:
+            raise ToolError(
+                message="sonarr.series_status: provide either sonarr_id or tvdb_id",
+                hint="run sonarr.series_search or sonarr.series_lookup first to obtain an id",
+            )
+        target = await _resolve_series(client, sonarr_id=args.sonarr_id, tvdb_id=args.tvdb_id)
+        return _series_to_status(target)
+
+    @mcp.tool(
         name="sonarr.missing",
         description=(
             "List monitored episodes that have aired but aren't on disk. Useful for "
@@ -388,6 +411,77 @@ async def _get_series_by_id(client: object, sonarr_id: int) -> SeriesResource:
             hint="call sonarr.series_search to discover valid sonarr_id values",
         )
     return result
+
+
+async def _resolve_series(client: object, *, sonarr_id: int | None, tvdb_id: int | None) -> SeriesResource:
+    """Resolve a series by either id, with a clear error when neither matches.
+
+    `sonarr_id` wins if both are provided. `tvdb_id` resolution goes through
+    `GET /api/v3/series?tvdbId=...` which returns the existing-library row
+    (not the external-catalog candidate). When tvdb_id is provided but the
+    series isn't in the library, the caller is nudged toward `*.series_add`.
+    """
+    if sonarr_id is not None:
+        return await _get_series_by_id(client, sonarr_id)
+    if tvdb_id is None:
+        raise ToolError(message="_resolve_series called with neither sonarr_id nor tvdb_id")
+    matches = await get_api_v3_series.asyncio(client=client, tvdb_id=tvdb_id)  # type: ignore[arg-type]
+    if not matches:
+        raise ToolError(
+            message=f"sonarr: tvdb_id={tvdb_id} is not in the library",
+            hint="add it first via sonarr.series_add(tvdb_id=...)",
+        )
+    return matches[0]
+
+
+def _series_to_status(s: SeriesResource) -> SeriesStatusResult:
+    """Project a SeriesResource into the per-season SeriesStatusResult shape."""
+    seasons_raw = s.seasons
+    # The generated client types `seasons` as `Unset | list[SeasonResource]`.
+    # Narrow via the positive `isinstance(..., list)` branch so mypy can see
+    # the list-ness inside the comprehension.
+    seasons_list: list[SeasonSummary] = (
+        [_season_to_summary(sn) for sn in seasons_raw]
+        if isinstance(seasons_raw, list)
+        else []
+    )
+    total_eps = sum(sm.episode_count for sm in seasons_list)
+    total_files = sum(sm.episode_file_count for sm in seasons_list)
+    total_size = sum(sm.size_on_disk for sm in seasons_list)
+    return SeriesStatusResult(
+        sonarr_id=_int_or_none(s.id) or 0,
+        tvdb_id=_int_or_none(s.tvdb_id),
+        title=_str_or_none(s.title) or "<unknown>",
+        year=_int_or_none(s.year),
+        status=_status_to_str(s.status),
+        monitored=_bool_or_none(s.monitored) or False,
+        seasons=seasons_list,
+        total_episode_count=total_eps,
+        total_episode_file_count=total_files,
+        total_size_on_disk=total_size,
+    )
+
+
+def _season_to_summary(sn: object) -> SeasonSummary:
+    """One row of `series.seasons[]` → our SeasonSummary."""
+    stats = getattr(sn, "statistics", None)
+    ep_count = 0
+    ep_file_count = 0
+    total_ep_count = 0
+    size_on_disk = 0
+    if stats is not None and not isinstance(stats, type(UNSET)):
+        ep_count = _int_or_none(getattr(stats, "episode_count", None)) or 0
+        ep_file_count = _int_or_none(getattr(stats, "episode_file_count", None)) or 0
+        total_ep_count = _int_or_none(getattr(stats, "total_episode_count", None)) or 0
+        size_on_disk = _int_or_none(getattr(stats, "size_on_disk", None)) or 0
+    return SeasonSummary(
+        season_number=_int_or_none(getattr(sn, "season_number", None)) or 0,
+        monitored=_bool_or_none(getattr(sn, "monitored", None)) or False,
+        episode_count=ep_count,
+        episode_file_count=ep_file_count,
+        total_episode_count=total_ep_count,
+        size_on_disk=size_on_disk,
+    )
 
 
 def _build_add_body(candidate: SeriesResource, args: SeriesAddInput) -> SeriesResource:

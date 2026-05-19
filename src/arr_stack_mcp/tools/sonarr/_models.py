@@ -185,6 +185,25 @@ class CalendarInput(BaseModel):
     )
 
 
+class SeriesStatusInput(BaseModel):
+    """Per-season breakdown for one series. Either id may be supplied.
+
+    Use this when the user asks 'what seasons does X have?' / 'is X complete?'
+    / 'how many episodes of X do we have?' / 'what's missing from X?'.
+    The result names each season's monitor state, episode count, and
+    on-disk count so the LLM can answer per-season questions accurately.
+    """
+
+    sonarr_id: int | None = Field(
+        default=None,
+        description="Internal Sonarr id from a prior `*.search` / `*.lookup` call. Either this or `tvdb_id` must be supplied.",
+    )
+    tvdb_id: int | None = Field(
+        default=None,
+        description="TVDB id; resolved to a `sonarr_id` internally. Useful when the agent only has the external id.",
+    )
+
+
 class MissingInput(BaseModel):
     """List monitored episodes that have aired but aren't on disk."""
 
@@ -265,3 +284,19 @@ class StatusResult(BaseModel):
     service: str = "sonarr"
     url: str
     status: SystemStatus
+
+
+class SeriesStatusResult(BaseModel):
+    """Returned by ``sonarr.series_status``. One series, expanded per-season."""
+
+    ok: bool = True
+    sonarr_id: int
+    tvdb_id: int | None
+    title: str
+    year: int | None
+    status: str | None = Field(default=None, description="continuing / ended / upcoming / deleted")
+    monitored: bool
+    seasons: list[SeasonSummary]
+    total_episode_count: int = Field(description="Sum of episode_count across all seasons.")
+    total_episode_file_count: int = Field(description="Sum of episode_file_count across all seasons (how many are on disk).")
+    total_size_on_disk: int = Field(description="Bytes on disk across all seasons.")
