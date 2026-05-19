@@ -440,11 +440,7 @@ def _series_to_status(s: SeriesResource) -> SeriesStatusResult:
     # The generated client types `seasons` as `Unset | list[SeasonResource]`.
     # Narrow via the positive `isinstance(..., list)` branch so mypy can see
     # the list-ness inside the comprehension.
-    seasons_list: list[SeasonSummary] = (
-        [_season_to_summary(sn) for sn in seasons_raw]
-        if isinstance(seasons_raw, list)
-        else []
-    )
+    seasons_list: list[SeasonSummary] = [_season_to_summary(sn) for sn in seasons_raw] if isinstance(seasons_raw, list) else []
     total_eps = sum(sm.episode_count for sm in seasons_list)
     total_files = sum(sm.episode_file_count for sm in seasons_list)
     total_size = sum(sm.size_on_disk for sm in seasons_list)

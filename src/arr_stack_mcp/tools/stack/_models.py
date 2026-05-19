@@ -55,17 +55,11 @@ class ReportIssueInput(BaseModel):
 
     summary: str = Field(
         min_length=1,
-        description=(
-            "One-line description of what went wrong, in the user's words. "
-            "Will be the issue title. Keep under ~80 chars."
-        ),
+        description=("One-line description of what went wrong, in the user's words. Will be the issue title. Keep under ~80 chars."),
     )
     detail: str | None = Field(
         default=None,
-        description=(
-            "Optional longer explanation, error excerpt, or repro steps. "
-            "Will be embedded in the issue body."
-        ),
+        description=("Optional longer explanation, error excerpt, or repro steps. Will be embedded in the issue body."),
     )
     include_dryrun_log: bool = Field(
         default=False,

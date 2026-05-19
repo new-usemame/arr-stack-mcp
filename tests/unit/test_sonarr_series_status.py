@@ -98,7 +98,7 @@ def test_partial_season_missing_episodes_visible_in_diff() -> None:
     """The agent's typical question 'what's missing from X?' is answered by ep_count - ep_file_count."""
     seasons = [
         _season(1, episode_count=10, episode_file_count=10),  # complete
-        _season(2, episode_count=10, episode_file_count=7),   # 3 missing
+        _season(2, episode_count=10, episode_file_count=7),  # 3 missing
     ]
     result = _series_to_status(_series(seasons=seasons))  # type: ignore[arg-type]
     missing_by_season = [s.episode_count - s.episode_file_count for s in result.seasons]

@@ -61,9 +61,7 @@ def test_sqlite_store_creates_schema_idempotently(tmp_path: Path) -> None:
     _SQLiteTokenStore(db)
     # Validate the schema exists.
     with sqlite3.connect(db) as conn:
-        rows = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='confirm_tokens'"
-        ).fetchall()
+        rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='confirm_tokens'").fetchall()
         assert rows == [("confirm_tokens",)]
 
 

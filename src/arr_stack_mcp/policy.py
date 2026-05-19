@@ -297,8 +297,7 @@ class Policy:
                 tool=tool_name,
                 reason=f"hourly cap reached: {tool_name} has fired {count} times this hour (cap {cap})",
                 hint=(
-                    "wait for the hour boundary, raise the cap in `policy.hourly_caps`, "
-                    "or remove the cap entry to disable it for this tool"
+                    "wait for the hour boundary, raise the cap in `policy.hourly_caps`, or remove the cap entry to disable it for this tool"
                 ),
             )
         self._hourly_counters[key] = count + 1

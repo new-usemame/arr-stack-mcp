@@ -124,6 +124,7 @@ def test_cap_evaluated_after_flag_gates() -> None:
     assert "read-only" in exc.value.message
     # Counter for x.add should be unchanged (zero).
     import time as _t
+
     hour = int(_t.time() // 3600)
     assert p._hourly_counters.get((hour, "x.add"), 0) == 0  # type: ignore[reportPrivateUsage]
 
