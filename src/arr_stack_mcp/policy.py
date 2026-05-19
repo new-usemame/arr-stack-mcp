@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import secrets
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Self
@@ -11,6 +12,11 @@ from typing import Self
 from pydantic import BaseModel, Field
 
 from arr_stack_mcp.errors import ConfirmRequired, PolicyDenied
+
+# Ring-buffer cap for the dry-run log surfaced by `stack.dryrun_log`. The buffer
+# is per-process and lossy on the older end — the goal is "show me the last N
+# would-have-fired mutations," not durable audit.
+DRYRUN_LOG_CAPACITY: int = 200
 
 
 class Tag(StrEnum):
@@ -26,6 +32,7 @@ class PolicyConfig(BaseModel):
 
     read_only: bool = False
     disable_destructive: bool = False
+    dry_run: bool = False
     confirm_token_ttl_seconds: int = Field(default=300, ge=10, le=3600)
     require_confirm_for_destructive: bool = True
 
@@ -40,22 +47,59 @@ class _PendingToken:
 
 @dataclass
 class Policy:
-    """Live policy enforcement. Owns the confirm-token cache."""
+    """Live policy enforcement. Owns the confirm-token cache + dry-run ring buffer."""
 
     read_only: bool
     disable_destructive: bool
+    dry_run: bool
     require_confirm_for_destructive: bool
     confirm_token_ttl_seconds: int
     _tokens: dict[str, _PendingToken] = field(default_factory=dict)
+    # Bounded ring buffer of recorded would-have-fired mutations. Surfaced via
+    # the `stack.dryrun_log` tool. Per-process; not persisted.
+    _dryrun_log: deque[dict[str, object]] = field(default_factory=lambda: deque(maxlen=DRYRUN_LOG_CAPACITY))
 
     @classmethod
-    def from_config(cls, cfg: PolicyConfig, *, read_only: bool, disable_destructive: bool) -> Self:
+    def from_config(cls, cfg: PolicyConfig, *, read_only: bool, disable_destructive: bool, dry_run: bool = False) -> Self:
         return cls(
             read_only=read_only,
             disable_destructive=disable_destructive,
+            dry_run=dry_run or cfg.dry_run,
             require_confirm_for_destructive=cfg.require_confirm_for_destructive,
             confirm_token_ttl_seconds=cfg.confirm_token_ttl_seconds,
         )
+
+    # --- dry-run ring buffer ------------------------------------------------
+
+    def record_dryrun(self, tool_name: str, payload: dict[str, object]) -> None:
+        """Append a would-have-fired mutation to the ring buffer.
+
+        Called by ``tools.common.dryrun_short_circuit`` after the read-side
+        prep (lookups, confirm-token validation) but BEFORE the upstream
+        mutating call. ``payload`` should be a JSON-safe dict — usually the
+        model_dump of the request body the upstream client would have sent.
+        """
+        self._dryrun_log.append(
+            {
+                "tool_name": tool_name,
+                "recorded_at": time.time(),
+                "payload": payload,
+            }
+        )
+
+    def dryrun_log(self, *, limit: int | None = None) -> list[dict[str, object]]:
+        """Return the recorded dry-run entries, newest-last.
+
+        ``limit`` trims to the most recent ``limit`` entries when set.
+        """
+        entries = list(self._dryrun_log)
+        if limit is not None and limit > 0:
+            entries = entries[-limit:]
+        return entries
+
+    def clear_dryrun_log(self) -> None:
+        """Reset the ring buffer. Test affordance; not exposed as a tool."""
+        self._dryrun_log.clear()
 
     def check(self, tool_name: str, tag: Tag) -> None:
         """Raise PolicyDenied if the active flags block this tool. Called at the top of every tool implementation."""

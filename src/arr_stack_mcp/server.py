@@ -22,6 +22,7 @@ def run(
     transport: str,
     read_only: bool,
     disable_destructive: bool,
+    dry_run: bool = False,
 ) -> None:
     """Boot the MCP server. Pure orchestration; the per-service registration lives in arr_stack_mcp.tools.*."""
     cfg = load_config(config_path)
@@ -29,6 +30,7 @@ def run(
         cfg.policy,
         read_only=read_only or cfg.policy.read_only,
         disable_destructive=disable_destructive or cfg.policy.disable_destructive,
+        dry_run=dry_run or cfg.policy.dry_run,
     )
     mcp = build_server(cfg, policy)
 
@@ -38,6 +40,7 @@ def run(
         toolsets=sorted(s.name for s in _enabled_services(cfg)),
         read_only=policy.read_only,
         disable_destructive=policy.disable_destructive,
+        dry_run=policy.dry_run,
     )
 
     if transport == "stdio":

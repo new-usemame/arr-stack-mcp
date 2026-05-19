@@ -47,6 +47,15 @@ def serve(
         "--disable-destructive",
         help="Globally disable every tool tagged destructive.",
     ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help=(
+            "Plan-and-record mode. WRITE / DESTRUCTIVE tools short-circuit at the curated-tool boundary, "
+            "log the intended payload to a ring buffer (surfaced by `stack.dryrun_log`), and return a "
+            "synthetic success envelope without firing the upstream mutation. READ tools are unaffected."
+        ),
+    ),
 ) -> None:
     """Boot the MCP server. Loads config, registers enabled toolsets, starts the chosen transport."""
     from arr_stack_mcp.server import run
@@ -56,6 +65,7 @@ def serve(
         transport=transport,
         read_only=read_only,
         disable_destructive=disable_destructive,
+        dry_run=dry_run,
     )
 
 
